@@ -14,6 +14,10 @@ export default [
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   {
+    files: ["**/*.cjs"],
+    languageOptions: { sourceType: "commonjs", globals: { ...globals.node } },
+  },
+  {
     files: ["**/*.astro"],
     rules: {
       // Lists styled with `list-style: none` lose their semantics in Safari/VoiceOver unless

@@ -1,0 +1,19 @@
+name: Content change
+description: Change or add copy on the page (every claim needs a source)
+title: "feat(content): <short description>"
+labels: ["content"]
+body:
+  - type: textarea
+    id: change
+    attributes:
+      label: What should change
+      description: The section and the new text, in Spanish (Peru).
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Source
+      description: The document that supports the claim (prototype, backlog, validation, ADR, charter). Claims without a source are not added.
+    validations:
+      required: true

@@ -1,0 +1,27 @@
+---
+import Base from "../layouts/Base.astro";
+import Mark from "../components/Mark.astro";
+import { es } from "../content/es";
+
+const n = es.notFound;
+---
+
+<Base title={`${n.title} · Te Tengo`} description={n.text} path="/404/" noindex>
+  <section class="bg-card" aria-labelledby="nf-title">
+    <div class="wrap grid justify-items-start py-24 lg:py-32">
+      <Mark tone="light" play="load" class="h-24 w-24" />
+      <h1 id="nf-title" class="t-h2 mt-8 max-w-[18ch]">
+        {n.title}
+      </h1>
+      <p class="t-lead mt-5 max-w-[40ch] text-ink-2">{n.text}</p>
+      <div class="mt-9 flex flex-wrap gap-3">
+        <a href="/" class="btn btn-primary">
+          {n.home}
+        </a>
+        <a href="/#descargas" class="btn btn-secondary">
+          {n.downloads}
+        </a>
+      </div>
+    </div>
+  </section>
+</Base>

@@ -1,0 +1,487 @@
+name: Publicar
+
+# Builds the Te Tengo apps from the private repositories at the chosen refs and, with
+# `publicar: true`, publishes them (docs/DEPLOY.md):
+#   - Android: universal APK `te-tengo.apk`, built by the mobile repository's reusable workflow
+#     build-apk.yml (te-tengo-mobile-flutter, docs/RELEASE_ANDROID.md);
+#   - Windows: installer `te-tengo-captura-setup.exe` (te-tengo-desktop-pywebview, its PyInstaller
+#     spec and Inno Setup script);
+#   - Web: the Flutter PWA (te-tengo-mobile-flutter `web/`, docs/WEB_PWA.md), built with base href /app/.
+# Publishing uploads the binaries, their .sha256 files and `te-tengo-web.tar.gz` to Cloudflare R2
+# under stable keys, then deploys this site with the PWA under /app/ to Cloudflare Pages
+# (production). With `publicar: false` (the default) everything stays as run artifacts.
+#
+# WHO RUNS IT: only the repository owner. The organization is on the GitHub Free plan with private
+# repositories, so environments with required reviewers are not available: the manual dispatch from
+# the main branch IS the approval. Never add a push or pull_request trigger to this workflow.
+#
+# Secrets (Settings → Secrets and variables → Actions). Every step whose secret is missing emits a
+# ::notice and is skipped:
+#   TT_REPOS_TOKEN             fine-grained token, read-only Contents on te-tengo-mobile-flutter and
+#                              te-tengo-desktop-pywebview (passed to build-apk.yml as MOBILE_REPO_TOKEN)
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#                              the release key, the same as in the mobile repository
+#   GOOGLE_SERVICES_JSON       base64 of google-services.json (push on Android)
+#   CLOUDFLARE_API_TOKEN       Cloudflare Pages: Edit + Workers R2 Storage: Edit
+#   CLOUDFLARE_ACCOUNT_ID      Cloudflare account ID
+# Variables:
+#   TT_API_URL                 HTTPS URL of the production API (APK and PWA)
+#   DESCARGAS_R2_BUCKET        name of the R2 bucket (e.g. te-tengo-descargas)
+#   DESCARGAS_BASE_URL         public URL of that bucket (r2.dev or custom domain), used by the site
+#   TT_FIREBASE_WEB_* and TT_FCM_VAPID_KEY   Firebase web config of the PWA (public values)
+#
+# Hardening: manual trigger only, GitHub-hosted runners, actions pinned to commit SHAs, no dependency
+# caches in the build jobs, no credentials persisted in checkouts, inputs passed through env, minimal
+# permissions per job.
+on:
+  workflow_dispatch:
+    inputs:
+      ref_mobile:
+        description: Rama, tag o commit de te-tengo-mobile-flutter (APK y PWA)
+        required: true
+        default: develop
+      ref_desktop:
+        description: Rama, tag o commit de te-tengo-desktop-pywebview (instalador de Windows)
+        required: true
+        default: develop
+      build_number:
+        description: versionCode del APK (vacío = el +N de pubspec.yaml). Debe crecer en cada publicación
+        required: false
+        default: ""
+      publicar:
+        description: Subir a R2 y desplegar el sitio con la PWA (si es false, solo artefactos)
+        type: boolean
+        default: false
+      permitir_apk_sin_firma:
+        description: Publicar aunque el APK esté firmado con la clave de depuración (no recomendado)
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+
+env:
+  ORG: Te-Tengo-Tech
+  REPO_MOBILE: te-tengo-mobile-flutter
+  REPO_DESKTOP: te-tengo-desktop-pywebview
+  FLUTTER_VERSION: 3.44.8
+  WRANGLER_VERSION: 4.149.0
+  PAGES_PROJECT: te-tengo
+
+jobs:
+  preparar:
+    name: Check the configuration and resolve the refs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      listo: ${{ steps.config.outputs.listo }}
+      sha_mobile: ${{ steps.refs.outputs.sha_mobile }}
+      sha_desktop: ${{ steps.refs.outputs.sha_desktop }}
+      web: ${{ steps.refs.outputs.web }}
+    env:
+      TT_REPOS_TOKEN: ${{ secrets.TT_REPOS_TOKEN }}
+      REF_MOBILE: ${{ inputs.ref_mobile }}
+      REF_DESKTOP: ${{ inputs.ref_desktop }}
+      BUILD_NUMBER: ${{ inputs.build_number }}
+      PUBLICAR: ${{ inputs.publicar }}
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+      HAS_FIREBASE: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
+      HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      TT_API_URL: ${{ vars.TT_API_URL || secrets.TT_API_URL }}
+      R2_BUCKET: ${{ vars.DESCARGAS_R2_BUCKET }}
+      DESCARGAS_BASE_URL: ${{ vars.DESCARGAS_BASE_URL }}
+    steps:
+      - name: Check the inputs and the secrets
+        id: config
+        run: |
+          set -euo pipefail
+          for ref in "$REF_MOBILE" "$REF_DESKTOP"; do
+            if [[ ! "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] || [[ "$ref" == *..* ]]; then
+              echo "::error title=Invalid ref::'$ref' is not a branch, tag or commit name."
+              exit 1
+            fi
+          done
+          if [ -n "$BUILD_NUMBER" ] && [[ ! "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error title=Invalid build_number::'$BUILD_NUMBER' must be a positive integer."
+            exit 1
+          fi
+          if [ "$PUBLICAR" = true ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error title=Publish only from main::Run the workflow from the main branch to publish (it deploys the production site)."
+            exit 1
+          fi
+
+          if [ -z "$TT_REPOS_TOKEN" ]; then
+            echo "::notice title=Nothing built: TT_REPOS_TOKEN is missing::Create a fine-grained token (resource owner Te-Tengo-Tech; repositories te-tengo-mobile-flutter and te-tengo-desktop-pywebview; permission Contents: Read-only) and save it as the TT_REPOS_TOKEN secret. See docs/DEPLOY.md."
+            {
+              echo "### Nothing was built"
+              echo "The \`TT_REPOS_TOKEN\` secret is missing, so the private repositories cannot be checked out. See docs/DEPLOY.md."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "listo=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          avisos=()
+          [ "$HAS_KEYSTORE" = true ] || avisos+=("ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD: the APK is debug-signed and will not be published")
+          [ "$HAS_FIREBASE" = true ] || avisos+=("GOOGLE_SERVICES_JSON: the APK is built without push notifications")
+          [ -n "$TT_API_URL" ] || avisos+=("TT_API_URL: the apps would point to a local backend")
+          if [ "$PUBLICAR" = true ]; then
+            [ "$HAS_CLOUDFLARE" = true ] || avisos+=("CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID: nothing will be uploaded or deployed")
+            [ -n "$R2_BUCKET" ] || avisos+=("DESCARGAS_R2_BUCKET: the binaries will not be uploaded to R2")
+            [ -n "$DESCARGAS_BASE_URL" ] || avisos+=("DESCARGAS_BASE_URL: the site will show the downloads as «Próximamente»")
+          fi
+          if [ ${#avisos[@]} -gt 0 ]; then
+            echo "::notice title=Incomplete configuration::$(IFS=';'; echo "${avisos[*]}")"
+          fi
+          echo "listo=true" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve the refs of the private repositories
+        id: refs
+        if: steps.config.outputs.listo == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.TT_REPOS_TOKEN }}
+        run: |
+          set -euo pipefail
+          resolver() {
+            local repo=$1 ref=$2 sha
+            if ! sha=$(gh api "repos/$ORG/$repo/commits/$ref" -q .sha 2> /dev/null); then
+              echo "::error title=Cannot read $repo::Ref '$ref' not found, or TT_REPOS_TOKEN has no Contents read access to $ORG/$repo."
+              return 1
+            fi
+            echo "$sha"
+          }
+          sha_mobile=$(resolver "$REPO_MOBILE" "$REF_MOBILE")
+          sha_desktop=$(resolver "$REPO_DESKTOP" "$REF_DESKTOP")
+          if gh api "repos/$ORG/$REPO_MOBILE/contents/web/index.html?ref=$sha_mobile" > /dev/null 2>&1; then
+            web=true
+          else
+            web=false
+            echo "::notice title=PWA skipped::$REPO_MOBILE@$REF_MOBILE has no web/ folder yet. Choose a ref that has it (e.g. feature/mobile-web-pwa)."
+          fi
+          {
+            echo "sha_mobile=$sha_mobile"
+            echo "sha_desktop=$sha_desktop"
+            echo "web=$web"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Sources"
+            echo "| Repository | Ref | Commit |"
+            echo "|---|---|---|"
+            echo "| $REPO_MOBILE | \`$REF_MOBILE\` | \`${sha_mobile:0:12}\` |"
+            echo "| $REPO_DESKTOP | \`$REF_DESKTOP\` | \`${sha_desktop:0:12}\` |"
+            echo
+            echo "PWA: $web · Publish: $PUBLICAR"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  android:
+    name: Android APK
+    needs: preparar
+    if: needs.preparar.outputs.listo == 'true'
+    permissions:
+      contents: read
+    # The reusable workflow lives in the mobile repository (PR #8 there, then develop). That
+    # repository must allow access from the organization's repositories:
+    # Settings → Actions → General → Access (docs/DEPLOY.md).
+    uses: Te-Tengo-Tech/te-tengo-mobile-flutter/.github/workflows/build-apk.yml@develop
+    with:
+      ref: ${{ needs.preparar.outputs.sha_mobile }}
+      build_number: ${{ inputs.build_number }}
+      artifact_name: te-tengo-apk
+      retention_days: 7
+    secrets:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      TT_API_URL: ${{ vars.TT_API_URL || secrets.TT_API_URL }}
+      # One token name in this repository; the mobile workflow calls it MOBILE_REPO_TOKEN.
+      MOBILE_REPO_TOKEN: ${{ secrets.TT_REPOS_TOKEN }}
+
+  windows:
+    name: Windows installer
+    needs: preparar
+    if: needs.preparar.outputs.listo == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions: {}
+    outputs:
+      version_agente: ${{ steps.version.outputs.version }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.ORG }}/${{ env.REPO_DESKTOP }}
+          ref: ${{ needs.preparar.outputs.sha_desktop }}
+          token: ${{ secrets.TT_REPOS_TOKEN }}
+          persist-credentials: false
+          path: desktop
+
+      - name: Version of the agent
+        id: version
+        shell: bash
+        run: |
+          version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/te_tengo_captura/__init__.py)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Te Tengo Captura $version"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: false
+      - name: Install dependencies
+        run: uv sync --locked --group empaquetado --quiet
+      - name: Download the MediaPipe model
+        shell: bash
+        run: ./scripts/descargar_modelo.sh
+      - name: Build with PyInstaller
+        run: uv run pyinstaller packaging/te-tengo-captura.spec --noconfirm --log-level WARN
+      - name: Smoke test the executable
+        shell: pwsh
+        run: |
+          $exe = "dist/te-tengo-captura/te-tengo-captura.exe"
+          $v = Start-Process -FilePath $exe -ArgumentList "--version" -Wait -PassThru
+          if ($v.ExitCode -ne 0) { throw "--version exited with $($v.ExitCode)" }
+          $p = Start-Process -FilePath $exe -ArgumentList "--autoprueba","--logs","logs" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content logs/te-tengo-captura.log; throw "--autoprueba exited with $($p.ExitCode)" }
+
+      - name: Compile the installer (Inno Setup)
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup --no-progress -y
+            $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          & $iscc.FullName /Qp "/DAppVersion=$env:VERSION" packaging\te-tengo-captura.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC exited with $LASTEXITCODE" }
+          New-Item -ItemType Directory -Force ..\salida | Out-Null
+          $instalador = Get-ChildItem dist\instalador\*.exe | Select-Object -First 1
+          Copy-Item $instalador.FullName ..\salida\te-tengo-captura-setup.exe
+      - name: Install and uninstall test
+        shell: pwsh
+        working-directory: salida
+        run: |
+          $ErrorActionPreference = "Stop"
+          $p = Start-Process .\te-tengo-captura-setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "The installer exited with $($p.ExitCode)" }
+          $app = Join-Path $env:LOCALAPPDATA "Programs\TeTengoCaptura"
+          $v = Start-Process (Join-Path $app "te-tengo-captura.exe") -ArgumentList "--version" -Wait -PassThru
+          if ($v.ExitCode -ne 0) { throw "The installed --version exited with $($v.ExitCode)" }
+          $u = Start-Process (Join-Path $app "unins000.exe") -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw "The uninstaller exited with $($u.ExitCode)" }
+      - name: Checksum
+        shell: bash
+        working-directory: salida
+        run: sha256sum te-tengo-captura-setup.exe | tee te-tengo-captura-setup.exe.sha256
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows
+          path: salida/
+          if-no-files-found: error
+          retention-days: 7
+
+  web:
+    name: Web PWA
+    needs: preparar
+    if: needs.preparar.outputs.listo == 'true' && needs.preparar.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: {}
+    env:
+      # Public Firebase web values (repository variables, never committed; docs/WEB_PWA.md of the
+      # mobile repository). Only the ones that are set become --dart-define values.
+      TT_API_URL: ${{ vars.TT_API_URL || secrets.TT_API_URL }}
+      TT_FIREBASE_WEB_API_KEY: ${{ vars.TT_FIREBASE_WEB_API_KEY }}
+      TT_FIREBASE_WEB_APP_ID: ${{ vars.TT_FIREBASE_WEB_APP_ID }}
+      TT_FIREBASE_WEB_MESSAGING_SENDER_ID: ${{ vars.TT_FIREBASE_WEB_MESSAGING_SENDER_ID }}
+      TT_FIREBASE_WEB_PROJECT_ID: ${{ vars.TT_FIREBASE_WEB_PROJECT_ID }}
+      TT_FIREBASE_WEB_AUTH_DOMAIN: ${{ vars.TT_FIREBASE_WEB_AUTH_DOMAIN }}
+      TT_FIREBASE_WEB_STORAGE_BUCKET: ${{ vars.TT_FIREBASE_WEB_STORAGE_BUCKET }}
+      TT_FIREBASE_WEB_MEASUREMENT_ID: ${{ vars.TT_FIREBASE_WEB_MEASUREMENT_ID }}
+      TT_FCM_VAPID_KEY: ${{ vars.TT_FCM_VAPID_KEY }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.ORG }}/${{ env.REPO_MOBILE }}
+          ref: ${{ needs.preparar.outputs.sha_mobile }}
+          token: ${{ secrets.TT_REPOS_TOKEN }}
+          persist-credentials: false
+          path: mobile
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: false
+      - name: Build defines
+        run: |
+          set -euo pipefail
+          jq -n 'env | with_entries(select((.key | test("^(TT_API_URL|TT_FIREBASE_WEB_[A-Z_]+|TT_FCM_VAPID_KEY)$")) and .value != ""))' \
+            > "$RUNNER_TEMP/defines.json"
+          echo "Defines: $(jq -r 'keys | join(", ")' "$RUNNER_TEMP/defines.json")"
+          for required in TT_FIREBASE_WEB_API_KEY TT_FIREBASE_WEB_APP_ID TT_FIREBASE_WEB_MESSAGING_SENDER_ID TT_FIREBASE_WEB_PROJECT_ID TT_FCM_VAPID_KEY; do
+            if ! jq -e --arg k "$required" 'has($k)' "$RUNNER_TEMP/defines.json" > /dev/null; then
+              echo "::notice title=PWA without web push::The repository variable $required is missing; the PWA works but cannot receive notifications."
+            fi
+          done
+      - name: Dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Build the PWA
+        run: |
+          timeout 20m flutter build web --release \
+            --base-href /app/ \
+            --no-web-resources-cdn \
+            --dart-define-from-file="$RUNNER_TEMP/defines.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web
+          path: mobile/build/web/
+          if-no-files-found: error
+          retention-days: 7
+
+  publicar:
+    name: Publish to R2 and Cloudflare Pages
+    needs: [preparar, android, windows, web]
+    # Only when asked, and only when every build that ran succeeded.
+    if: >-
+      !cancelled() && inputs.publicar && needs.preparar.outputs.listo == 'true'
+      && needs.android.result == 'success' && needs.windows.result == 'success'
+      && (needs.web.result == 'success' || needs.web.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_BUCKET: ${{ vars.DESCARGAS_R2_BUCKET }}
+      DESCARGAS_BASE_URL: ${{ vars.DESCARGAS_BASE_URL }}
+      APK_SIGNED: ${{ needs.android.outputs.signed }}
+      APK_CERT: ${{ needs.android.outputs.certificate_sha256 }}
+      APK_VERSION: ${{ needs.android.outputs.version_name }} (${{ needs.android.outputs.version_code }})
+      ALLOW_UNSIGNED: ${{ inputs.permitir_apk_sin_firma }}
+      WEB: ${{ needs.web.result == 'success' }}
+      VERSION_AGENTE: ${{ needs.windows.outputs.version_agente }}
+    steps:
+      - name: Refuse a debug-signed APK
+        run: |
+          if [ "$APK_SIGNED" != true ] && [ "$ALLOW_UNSIGNED" != true ]; then
+            echo "::error title=APK not signed with the release key::A debug-signed APK cannot be updated by later builds. Add the four ANDROID_* secrets, or rerun with permitir_apk_sin_firma=true for a throwaway test."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: sitio
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.android.outputs.artifact_name }}
+          path: salida
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows
+          path: salida
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: env.WEB == 'true'
+        with:
+          name: web
+          path: web
+
+      - name: Package the PWA
+        if: env.WEB == 'true'
+        run: |
+          tar -czf salida/te-tengo-web.tar.gz -C web .
+          (cd salida && sha256sum te-tengo-web.tar.gz > te-tengo-web.tar.gz.sha256)
+
+      - name: Explain what is missing
+        if: env.HAS_CLOUDFLARE != 'true' || env.R2_BUCKET == ''
+        run: |
+          echo "::notice title=Not published::Set the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets and the DESCARGAS_R2_BUCKET variable (docs/DEPLOY.md). The builds are kept as run artifacts."
+
+      - name: Upload to Cloudflare R2
+        if: env.HAS_CLOUDFLARE == 'true' && env.R2_BUCKET != ''
+        working-directory: salida
+        run: |
+          set -euo pipefail
+          put() {
+            local file=$1 type=$2 disposition=$3
+            [ -f "$file" ] || return 0
+            npx --yes "wrangler@$WRANGLER_VERSION" r2 object put "$R2_BUCKET/$file" --remote \
+              --file "$file" --content-type "$type" --cache-control "no-cache" \
+              ${disposition:+--content-disposition "$disposition"}
+          }
+          put te-tengo.apk application/vnd.android.package-archive 'attachment; filename="te-tengo.apk"'
+          put te-tengo.apk.sha256 "text/plain; charset=utf-8" ""
+          put te-tengo-captura-setup.exe application/vnd.microsoft.portable-executable 'attachment; filename="te-tengo-captura-setup.exe"'
+          put te-tengo-captura-setup.exe.sha256 "text/plain; charset=utf-8" ""
+          put te-tengo-web.tar.gz application/gzip ""
+          put te-tengo-web.tar.gz.sha256 "text/plain; charset=utf-8" ""
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: env.HAS_CLOUDFLARE == 'true'
+        with:
+          package_json_file: sitio/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: env.HAS_CLOUDFLARE == 'true'
+        with:
+          node-version-file: sitio/.nvmrc
+      - name: Build the site with the PWA under /app/
+        if: env.HAS_CLOUDFLARE == 'true'
+        working-directory: sitio
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          PUBLIC_DESCARGAS_BASE_URL: ${{ vars.DESCARGAS_BASE_URL }}
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm build
+          if [ "$WEB" = true ]; then
+            mkdir -p dist/app
+            cp -R ../web/. dist/app/
+          elif [ -n "$DESCARGAS_BASE_URL" ] && curl -fsSL -o "$RUNNER_TEMP/web.tar.gz" "${DESCARGAS_BASE_URL%/}/te-tengo-web.tar.gz"; then
+            mkdir -p dist/app
+            tar -xzf "$RUNNER_TEMP/web.tar.gz" -C dist/app
+          fi
+      - name: Create the Pages project if it does not exist
+        if: env.HAS_CLOUDFLARE == 'true'
+        run: |
+          if ! npx --yes "wrangler@$WRANGLER_VERSION" pages project list 2> /dev/null | grep -q " $PAGES_PROJECT "; then
+            npx --yes "wrangler@$WRANGLER_VERSION" pages project create "$PAGES_PROJECT" --production-branch main
+          fi
+      - name: Deploy to Cloudflare Pages (production)
+        id: pages
+        if: env.HAS_CLOUDFLARE == 'true'
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          workingDirectory: sitio
+          command: pages deploy dist --project-name=${{ env.PAGES_PROJECT }} --branch=main --commit-hash=${{ github.sha }}
+
+      - name: Summary
+        if: always()
+        env:
+          URL: ${{ steps.pages.outputs.deployment-url }}
+        run: |
+          {
+            echo "## Te Tengo publication"
+            echo "- APK: $APK_VERSION, signed with the release key: $APK_SIGNED"
+            echo "- APK signing certificate SHA-256: \`$APK_CERT\`"
+            echo "- Te Tengo Captura: $VERSION_AGENTE"
+            echo "- PWA built in this run: $WEB"
+            echo "- Downloads: ${DESCARGAS_BASE_URL:-not configured}"
+            echo "- Site: ${URL:-not deployed}"
+          } >> "$GITHUB_STEP_SUMMARY"

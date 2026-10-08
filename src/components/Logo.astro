@@ -1,0 +1,37 @@
+---
+import { LOGO_TE, LOGO_TENGO, LOGO_VIEWBOX } from "./brand-paths";
+
+interface Props {
+  tone?: "light" | "dark";
+  play?: boolean;
+  class?: string;
+}
+
+/**
+ * Horizontal logotype (brand/logotipo.svg and logotipo-blanco.svg) in one SVG. The symbol is split
+ * into stem, arm halves and dot so it can assemble itself like the app's splash when `play` is set.
+ * `dark` is for morado or dark grounds. Decorative: the caller names the link it sits in.
+ */
+const { tone = "light", play = false, class: className = "" } = Astro.props;
+const ink = tone === "dark" ? "#FFFFFF" : "#4A2A85";
+const accent = tone === "dark" ? "#FFB59C" : "#E8765A";
+---
+
+<svg
+  viewBox={LOGO_VIEWBOX}
+  class:list={["tt-mark", play && "is-playing", className]}
+  overflow="visible"
+  aria-hidden="true"
+  focusable="false"
+>
+  <g fill="none" stroke={ink} stroke-width="13" stroke-linecap="round">
+    <path class="tt-stem" pathLength="1" d="M60 60 V96"></path>
+    <g class="tt-catch">
+      <path class="tt-arm" pathLength="1" d="M60 59 Q41 59 22 38"></path>
+      <path class="tt-arm" pathLength="1" d="M60 59 Q79 59 98 38"></path>
+      <circle class="tt-dot" cx="60" cy="38" r="11" fill={accent} stroke="none"></circle>
+    </g>
+  </g>
+  <path fill={ink} d={LOGO_TE}></path>
+  <path fill={accent} d={LOGO_TENGO}></path>
+</svg>

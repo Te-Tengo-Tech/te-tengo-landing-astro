@@ -1,0 +1,10 @@
+# Cloudflare Pages redirects (https://developers.cloudflare.com/pages/configuration/redirects/).
+# Short links to the downloads section. Never add a splat rule under /app/: redirects run before
+# static assets on Pages, so it would break the Flutter PWA's files.
+/descargas    /#descargas  301
+/descargas/   /#descargas  301
+/descargar    /#descargas  301
+/descargar/   /#descargas  301
+/download     /#descargas  301
+/download/    /#descargas  301
+/app          /app/        301

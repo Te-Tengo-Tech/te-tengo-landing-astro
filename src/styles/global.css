@@ -1,0 +1,501 @@
+@import "tailwindcss";
+
+/*
+ * Te Tengo tokens. Values come from the mobile prototype (DESIGN.md, `:root` of prototipo.html) and
+ * the brand README. Coral and durazno are brand colours only (symbol dot, never text, buttons or
+ * states). Red, amber and green are reserved for real states.
+ */
+@theme {
+  --font-sans:
+    "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-ground: #eef0f4;
+  --color-ground-2: #e4e6ec;
+  --color-card: #ffffff;
+  --color-ink: #221a38;
+  --color-ink-2: #4f4766;
+  --color-ink-3: #655d7a;
+  --color-line: #d9d7e1;
+  --color-line-2: #c7c3d3;
+
+  --color-morado: #4a2a85;
+  --color-morado-press: #3a1f6c;
+  --color-morado-soft: #ece7f6;
+  --color-morado-ink: #3b2270;
+  --color-morado-deep: #2b1856;
+  --color-lila: #e4daf4;
+  --color-coral: #e8765a;
+  --color-durazno: #ffb59c;
+
+  --color-caida: #bf2a1b;
+  --color-caida-soft: #fbe8e5;
+  --color-caida-ink: #9c2012;
+  --color-inestable: #f1b42f;
+  --color-inestable-soft: #fdf3db;
+  --color-inestable-ink: #6e4b00;
+  --color-calma: #1c7a4c;
+  --color-calma-soft: #e2f2e9;
+  --color-calma-ink: #145c39;
+  --color-pausa: #4e5b74;
+  --color-pausa-soft: #e6e9f0;
+
+  --radius-card: 22px;
+  --radius-ctl: 16px;
+  --radius-hero: 32px;
+
+  --shadow-1: 0 1px 2px rgb(34 26 56 / 0.05), 0 4px 14px rgb(34 26 56 / 0.06);
+  --shadow-2: 0 10px 30px rgb(34 26 56 / 0.16), 0 2px 6px rgb(34 26 56 / 0.08);
+  --shadow-float: 0 18px 40px -12px rgb(20 10 45 / 0.45), 0 4px 10px rgb(20 10 45 / 0.18);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --breakpoint-xs: 26rem;
+}
+
+/* Self-hosted Atkinson Hyperlegible (OFL, public/fonts/OFL.txt), Latin subset, variable weight. */
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  src: url("/fonts/atkinson-hyperlegible-next.woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible Mono";
+  src: url("/fonts/atkinson-hyperlegible-mono.woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    scroll-padding-top: 5.5rem;
+    background: var(--color-morado);
+    color-scheme: light;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--color-card);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 1.0625rem;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+  @media (min-width: 64rem) {
+    body {
+      font-size: 1.125rem;
+    }
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    margin: 0;
+  }
+  p {
+    text-wrap: pretty;
+    margin: 0;
+  }
+  ::selection {
+    background: var(--color-morado-soft);
+    color: var(--color-morado-ink);
+  }
+  .on-morado ::selection {
+    background: var(--color-lila);
+    color: var(--color-morado-deep);
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-morado);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+  .on-morado :focus-visible {
+    outline-color: #ffffff;
+  }
+  a {
+    color: inherit;
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: 1.5px;
+  }
+  main:focus {
+    outline: none;
+  }
+  .mono,
+  time {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  html {
+    scrollbar-color: var(--color-line-2) var(--color-ground);
+  }
+}
+
+@layer components {
+  .wrap {
+    width: 100%;
+    max-width: 75rem;
+    margin-inline: auto;
+    padding-inline: 1.25rem;
+  }
+  @media (min-width: 48rem) {
+    .wrap {
+      padding-inline: 2rem;
+    }
+  }
+
+  .skip-link {
+    position: absolute;
+    left: 1rem;
+    top: -4rem;
+    z-index: 100;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-ctl);
+    background: #fff;
+    color: var(--color-morado-ink);
+    font-weight: 700;
+    box-shadow: var(--shadow-2);
+    transition: top 0.2s var(--ease-out-expo);
+  }
+  .skip-link:focus {
+    top: 1rem;
+  }
+
+  /* Type scale: obvious steps, display capped, tracking floor respected. */
+  .t-display {
+    font-size: clamp(2.5rem, 1.6rem + 4.2vw, 4.75rem);
+    line-height: 1.02;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+  .t-h2 {
+    font-size: clamp(2rem, 1.4rem + 2.6vw, 3.375rem);
+    line-height: 1.06;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+  }
+  .t-h3 {
+    font-size: 1.3125rem;
+    line-height: 1.3;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .t-lead {
+    font-size: clamp(1.1875rem, 1.05rem + 0.5vw, 1.4375rem);
+    line-height: 1.45;
+  }
+  .t-meta {
+    font-size: 0.9375rem;
+    line-height: 1.45;
+    color: var(--color-ink-3);
+  }
+
+  /* Buttons: 52px tall targets, the morado one is the only primary outside alerts. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-height: 3.25rem;
+    padding: 0 1.4rem;
+    border-radius: var(--radius-ctl);
+    font-weight: 800;
+    font-size: 1.0625rem;
+    line-height: 1.1;
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+      background-color 0.2s var(--ease-out-expo),
+      color 0.2s var(--ease-out-expo),
+      box-shadow 0.2s var(--ease-out-expo),
+      transform 0.2s var(--ease-out-expo);
+  }
+  .btn svg {
+    width: 1.3rem;
+    height: 1.3rem;
+    flex: none;
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn-primary {
+    background: var(--color-morado);
+    color: #fff;
+    box-shadow: 0 6px 16px -8px rgb(74 42 133 / 0.7);
+  }
+  .btn-primary:hover {
+    background: var(--color-morado-press);
+  }
+  .btn-secondary {
+    background: var(--color-card);
+    color: var(--color-morado-ink);
+    box-shadow: inset 0 0 0 2px var(--color-line-2);
+  }
+  .btn-secondary:hover {
+    box-shadow: inset 0 0 0 2px var(--color-morado);
+  }
+  .btn-white {
+    background: #fff;
+    color: var(--color-morado-ink);
+    box-shadow: 0 10px 24px -12px rgb(10 4 30 / 0.6);
+  }
+  .btn-white:hover {
+    background: var(--color-morado-soft);
+  }
+  .btn-ghost-light {
+    color: #fff;
+    box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.55);
+  }
+  .btn-ghost-light:hover {
+    background: rgb(255 255 255 / 0.1);
+    box-shadow: inset 0 0 0 2px #fff;
+  }
+  .btn-soon {
+    background: var(--color-ground);
+    color: var(--color-ink-2);
+    box-shadow: inset 0 0 0 2px var(--color-line-2);
+    border: 0;
+    cursor: not-allowed;
+  }
+
+  .link {
+    color: var(--color-morado-ink);
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: rgb(74 42 133 / 0.35);
+  }
+  .link:hover {
+    text-decoration-color: currentColor;
+  }
+
+  /* Illustration frame: the stylised room from the prototype. */
+  .frame {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-card);
+    background: #e7e3ee;
+  }
+  .frame > svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .tag {
+    position: absolute;
+    left: 0.875rem;
+    top: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem 0.35rem 0.55rem;
+    border-radius: 999px;
+    background: rgb(34 26 56 / 0.82);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .tag svg {
+    width: 1rem;
+    height: 1rem;
+    flex: none;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.25rem;
+    padding: 0 0.85rem;
+    border-radius: 999px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    background: var(--color-card);
+    color: var(--color-ink-2);
+    box-shadow: inset 0 0 0 1.5px var(--color-line-2);
+  }
+  .chip[aria-current="true"],
+  .chip.is-on {
+    background: var(--color-morado-soft);
+    color: var(--color-morado-ink);
+    box-shadow: inset 0 0 0 2px var(--color-morado);
+  }
+
+  .icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex: none;
+  }
+
+  .example-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--color-ink-3);
+  }
+}
+
+/*
+ * «La T que sostiene» assembling itself, as in the app's splash (DESIGN.md): the arms open from the
+ * centre, the dot falls and the arms receive it with a small give, then the stem is drawn.
+ * Only transform, opacity and stroke-dashoffset animate. Reduced motion shows the final frame.
+ */
+@keyframes tt-draw {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+@keyframes tt-drop {
+  0% {
+    transform: translateY(-96px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes tt-catch {
+  0% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
+  }
+  32% {
+    transform: translateY(5px);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes tt-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+.tt-mark .tt-arm,
+.tt-mark .tt-stem {
+  stroke-dasharray: 1 1;
+}
+.tt-mark.is-playing .tt-arm {
+  animation: tt-draw 0.42s cubic-bezier(0.3, 0.7, 0.3, 1) 0.06s both;
+}
+.tt-mark.is-playing .tt-dot {
+  animation: tt-drop 0.42s cubic-bezier(0.55, 0, 0.85, 0.35) 0.32s both;
+}
+.tt-mark.is-playing .tt-catch {
+  animation: tt-catch 0.42s 0.74s both;
+}
+.tt-mark.is-playing .tt-stem {
+  animation: tt-draw 0.32s cubic-bezier(0.3, 0.7, 0.3, 1) 0.92s both;
+}
+
+/* Hero entrance: one orchestrated moment, content visible by default without animation support. */
+.hero-rise > * {
+  animation: tt-rise 0.7s var(--ease-out-expo) both;
+}
+/* The headline is the LCP element: it settles into place but is never transparent. */
+.hero-rise > h1 {
+  animation-name: tt-lift;
+}
+@keyframes tt-lift {
+  from {
+    transform: translateY(14px);
+  }
+}
+.hero-rise > *:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.hero-rise > *:nth-child(3) {
+  animation-delay: 0.16s;
+}
+.hero-rise > *:nth-child(4) {
+  animation-delay: 0.24s;
+}
+.hero-rise > *:nth-child(5) {
+  animation-delay: 0.32s;
+}
+
+/* The pose figure breathes very slightly, as in the prototype's live view. */
+@keyframes tt-sway {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(0.8deg);
+  }
+}
+.skel-sway {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: tt-sway 5s ease-in-out infinite;
+}
+
+/* The final call to action plays the symbol when it scrolls into view (no JS). */
+@supports (animation-timeline: view()) {
+  .tt-mark.on-view .tt-arm,
+  .tt-mark.on-view .tt-stem,
+  .tt-mark.on-view .tt-dot,
+  .tt-mark.on-view .tt-catch {
+    animation-timeline: view();
+    animation-range: entry 10% cover 45%;
+    animation-fill-mode: both;
+    animation-duration: 1ms;
+  }
+  .tt-mark.on-view .tt-arm {
+    animation-name: tt-draw;
+    animation-range: entry 5% cover 30%;
+  }
+  .tt-mark.on-view .tt-dot {
+    animation-name: tt-drop;
+    animation-range: entry 20% cover 40%;
+    animation-timing-function: cubic-bezier(0.55, 0, 0.85, 0.35);
+  }
+  .tt-mark.on-view .tt-catch {
+    animation-name: tt-catch;
+    animation-range: cover 38% cover 48%;
+  }
+  .tt-mark.on-view .tt-stem {
+    animation-name: tt-draw;
+    animation-range: cover 40% cover 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+  .tt-mark .tt-arm,
+  .tt-mark .tt-stem {
+    stroke-dasharray: none;
+  }
+}

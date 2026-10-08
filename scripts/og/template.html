@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es-PE">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @font-face {
+        font-family: "Atkinson Hyperlegible Next";
+        src: url("FONT_URL") format("woff2");
+        font-weight: 200 800;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+      }
+      body {
+        background: #4a2a85;
+        color: #fff;
+        font-family: "Atkinson Hyperlegible Next", sans-serif;
+        display: grid;
+        grid-template-columns: 1fr 470px;
+        gap: 56px;
+        align-items: center;
+        padding: 64px 72px;
+        position: relative;
+      }
+      .logo {
+        height: 54px;
+        display: block;
+      }
+      h1 {
+        margin-top: 44px;
+        font-size: 64px;
+        line-height: 1.03;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+      p {
+        margin-top: 28px;
+        font-size: 26px;
+        line-height: 1.35;
+        color: #e4daf4;
+        max-width: 26ch;
+      }
+      .card {
+        position: relative;
+        border-radius: 32px;
+        overflow: hidden;
+        aspect-ratio: 16 / 13;
+        box-shadow: 0 30px 60px -20px rgba(10, 4, 30, 0.6);
+      }
+      .card svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .tag {
+        position: absolute;
+        left: 18px;
+        top: 18px;
+        padding: 8px 16px;
+        border-radius: 999px;
+        background: rgba(34, 26, 56, 0.82);
+        font-size: 20px;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      LOGO_SVG
+      <h1>Cuida a tu familiar aunque no estés en casa.</h1>
+      <p>Una cámara en su casa reconoce caídas. Te avisamos al instante en tu celular.</p>
+    </div>
+    <div class="card">ROOM_SVG<span class="tag">Solo postura, nunca rostros</span></div>
+  </body>
+</html>

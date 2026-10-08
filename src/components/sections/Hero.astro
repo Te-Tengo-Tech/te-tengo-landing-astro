@@ -1,0 +1,179 @@
+---
+import { es } from "../../content/es";
+import Icon from "../Icon.astro";
+import Room from "../Room.astro";
+
+const h = es.hero;
+---
+
+<section class="hero on-morado" aria-labelledby="hero-title">
+  <div class="wrap grid items-center gap-12 pt-10 pb-16 md:pt-14 lg:grid-cols-[1.08fr_0.92fr] lg:gap-14 lg:pt-16 lg:pb-24">
+    <div class="hero-rise max-w-[40rem]">
+      <h1 id="hero-title" class="t-display text-white">
+        {h.title}
+      </h1>
+      <p class="t-lead mt-6 max-w-[34ch] text-lila">{h.lead}</p>
+      <div class="mt-9 flex flex-wrap gap-3">
+        <a href="#descargas" class="btn btn-white">
+          <Icon name="download" />
+          {h.primary}
+        </a>
+        <a href="#como-funciona" class="btn btn-ghost-light">
+          {h.secondary}
+          <Icon name="arrowR" />
+        </a>
+      </div>
+      <p class="hero-pilot mt-6">
+        <span class="hero-pilot-dot" aria-hidden="true"></span>
+        {h.pilot}
+      </p>
+      <ul class="hero-points mt-12" role="list">
+        {h.points.map((p) => (
+          <li>
+            <span class="hero-point-icon">
+              <Icon name={p.icon as "user"} />
+            </span>
+            <span>{p.text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <div class="hero-visual">
+      <figure class="hero-frame frame">
+        <Room room="Sala" pose="pie" sway fit="slice" label={h.illustrationLabel} class="h-full w-full" />
+        <span class="tag">
+          <Icon name="shield" />
+          {h.tag}
+        </span>
+      </figure>
+      <div
+        class="status-card"
+        role="img"
+        aria-label={`${h.statusLabel}: ${h.status.title}. ${h.status.text}`}
+      >
+        <span class="status-band" aria-hidden="true"></span>
+        <span class="status-icon">
+          <Icon name="sun" />
+        </span>
+        <span>
+          <span class="block font-extrabold text-ink">{h.status.title}</span>
+          <span class="block text-[0.9375rem] leading-snug text-ink-2">{h.status.text}</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero {
+    position: relative;
+    background: var(--color-morado);
+    color: #fff;
+    isolation: isolate;
+    overflow: clip;
+  }
+  /* The arms of the symbol, enormous and quiet, holding the hero from below. */
+  .hero::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: 50%;
+    bottom: -30rem;
+    width: 120rem;
+    height: 40rem;
+    translate: -50% 0;
+    border-radius: 0 0 50% 50% / 0 0 100% 100%;
+    border: 0 solid rgb(255 255 255 / 0.05);
+    border-width: 0 7rem 7rem;
+    pointer-events: none;
+  }
+  .hero-pilot {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--color-lila);
+    font-size: 0.9375rem;
+    font-weight: 700;
+  }
+  .hero-pilot-dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background: var(--color-durazno);
+  }
+  .hero-points {
+    display: grid;
+    gap: 0.9rem;
+    list-style: none;
+    color: var(--color-lila);
+    font-size: 1rem;
+    line-height: 1.45;
+    max-width: 36rem;
+  }
+  .hero-points li {
+    display: flex;
+    gap: 0.85rem;
+    align-items: flex-start;
+  }
+  .hero-point-icon {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: none;
+    border-radius: 12px;
+    background: rgb(255 255 255 / 0.1);
+    color: #fff;
+  }
+  .hero-point-icon :global(svg) {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+  .hero-visual {
+    position: relative;
+    padding-bottom: 2.5rem;
+  }
+  .hero-frame {
+    aspect-ratio: 16 / 13;
+    border-radius: var(--radius-hero);
+    box-shadow: var(--shadow-float);
+    animation: tt-rise 0.9s var(--ease-out-expo) 0.15s both;
+  }
+  .status-card {
+    position: absolute;
+    left: -0.5rem;
+    bottom: 0;
+    display: flex;
+    gap: 0.85rem;
+    align-items: center;
+    max-width: min(22rem, 92%);
+    padding: 1rem 1.1rem 1rem 1rem;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: var(--shadow-2);
+    overflow: hidden;
+    animation: tt-rise 0.8s var(--ease-out-expo) 0.55s both;
+  }
+  .status-band {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 5px;
+    background: var(--color-calma);
+  }
+  .status-icon {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: none;
+    border-radius: 14px;
+    background: var(--color-calma-soft);
+    color: var(--color-calma-ink);
+  }
+  @media (min-width: 64rem) {
+    .status-card {
+      left: -2.5rem;
+    }
+  }
+</style>

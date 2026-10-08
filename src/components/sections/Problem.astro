@@ -1,0 +1,104 @@
+---
+import { es } from "../../content/es";
+import Icon from "../Icon.astro";
+
+const p = es.problem;
+---
+
+<section class="bg-card" aria-labelledby="problema-title">
+  <div class="wrap grid gap-12 py-20 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20 lg:py-28">
+    <div class="lg:sticky lg:top-28 lg:self-start">
+      <h2 id="problema-title" class="t-h2 max-w-[16ch]">
+        {p.title}
+      </h2>
+      <p class="t-lead mt-6 max-w-[38ch] text-ink-2">{p.lead}</p>
+    </div>
+
+    <div>
+      <ol class="facts" role="list">
+        {p.facts.map((f) => (
+          <li class="fact">
+            <p class="fact-value">{f.value}</p>
+            <div>
+              <p class="fact-text">{f.text}</p>
+              <p class="t-meta mt-2">
+                {es.a11y.source}{" "}
+                <a class="link font-bold!" href={f.href} rel="noopener" target="_blank">
+                  {f.source}
+                  <span class="sr-only"> {es.a11y.external}</span>
+                </a>
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p class="close mt-10">
+        <span class="close-icon">
+          <Icon name="bell" />
+        </span>
+        <span>{p.close}</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .facts {
+    list-style: none;
+    border-top: 2px solid var(--color-ink);
+  }
+  .fact {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem 2rem;
+    padding: 1.75rem 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+  @media (min-width: 40rem) {
+    .fact {
+      grid-template-columns: 11rem 1fr;
+      align-items: baseline;
+    }
+  }
+  .fact-value {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-size: clamp(2.75rem, 2.2rem + 2vw, 3.75rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--color-morado);
+  }
+  .fact-text {
+    font-size: 1.1875rem;
+    line-height: 1.45;
+    max-width: 40ch;
+  }
+  .close {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 1.4rem 1.5rem;
+    border-radius: var(--radius-card);
+    background: var(--color-morado-soft);
+    color: var(--color-morado-ink);
+    font-weight: 700;
+    font-size: 1.125rem;
+    line-height: 1.45;
+  }
+  .close-icon {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: none;
+    border-radius: 12px;
+    background: var(--color-morado);
+    color: #fff;
+  }
+  .close-icon :global(svg) {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+</style>

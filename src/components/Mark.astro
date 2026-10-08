@@ -1,0 +1,36 @@
+---
+/**
+ * «La T que sostiene» (brand/simbolo.svg). Geometry from the brand README: stem M60 60 V96, arms
+ * M22 38 Q60 80 98 38, dot at 60,38 r 11. For the animation the arms are drawn as two halves from
+ * the centre, exactly as the app's splash does.
+ */
+interface Props {
+  tone?: "light" | "dark";
+  play?: "load" | "view" | "none";
+  class?: string;
+  label?: string;
+}
+
+const { tone = "dark", play = "none", class: className = "", label } = Astro.props;
+const stroke = tone === "dark" ? "#FFFFFF" : "#4A2A85";
+const dot = tone === "dark" ? "#FFB59C" : "#E8765A";
+const playClass = play === "load" ? "is-playing" : play === "view" ? "on-view" : "";
+const a11y = label ? { role: "img" as const, "aria-label": label } : { "aria-hidden": "true" as const };
+---
+
+<svg
+  viewBox="0 0 120 120"
+  class:list={["tt-mark", playClass, className]}
+  overflow="visible"
+  focusable="false"
+  {...a11y}
+>
+  <g fill="none" stroke={stroke} stroke-width="13" stroke-linecap="round">
+    <path class="tt-stem" pathLength="1" d="M60 60 V96"></path>
+    <g class="tt-catch">
+      <path class="tt-arm" pathLength="1" d="M60 59 Q41 59 22 38"></path>
+      <path class="tt-arm" pathLength="1" d="M60 59 Q79 59 98 38"></path>
+      <circle class="tt-dot" cx="60" cy="38" r="11" fill={dot} stroke="none"></circle>
+    </g>
+  </g>
+</svg>

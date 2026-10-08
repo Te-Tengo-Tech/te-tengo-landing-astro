@@ -1,0 +1,237 @@
+---
+/**
+ * The stylised room with the pose skeleton, ported from the prototype's `roomSVG()` and
+ * `skeleton()` (prototipo.html). Nothing here is a photo of a person: only the room and the pose.
+ * `variant="pose"` draws the «Solo postura» live view: the skeleton alone, no room pixels.
+ */
+type Pose = "pie" | "inestable" | "caida" | "none";
+
+interface Props {
+  room?: "Sala" | "Dormitorio";
+  pose?: Pose;
+  ring?: boolean;
+  webcam?: boolean;
+  sway?: boolean;
+  variant?: "room" | "pose";
+  label?: string;
+  class?: string;
+  /** Crop like the prototype (slice) or show the whole drawing (meet). */
+  fit?: "slice" | "meet";
+}
+
+const {
+  room = "Sala",
+  pose = "pie",
+  ring = false,
+  webcam = false,
+  sway = false,
+  variant = "room",
+  label,
+  class: className = "",
+  fit = "slice",
+} = Astro.props;
+
+const C = {
+  wall: "#E7E3EE",
+  wall2: "#DDD7E7",
+  floor: "#CFC7DC",
+  f2: "#C3BAD3",
+  furn: "#B3A8C7",
+  furn2: "#9E91B6",
+  wood: "#D9C1AE",
+  win: "#D5DDE8",
+};
+
+type Joint = readonly [number, number];
+const POSES: Record<Exclude<Pose, "none">, Record<string, Joint>> = {
+  pie: {
+    h: [0, -106],
+    n: [0, -96],
+    sL: [-11, -92],
+    sR: [11, -92],
+    eL: [-15, -72],
+    eR: [15, -72],
+    wL: [-17, -54],
+    wR: [17, -54],
+    hL: [-7, -52],
+    hR: [7, -52],
+    kL: [-8, -26],
+    kR: [8, -26],
+    aL: [-9, 0],
+    aR: [9, 0],
+  },
+  inestable: {
+    h: [8, -104],
+    n: [6, -94],
+    sL: [-6, -90],
+    sR: [15, -92],
+    eL: [-24, -82],
+    eR: [30, -104],
+    wL: [-38, -88],
+    wR: [40, -118],
+    hL: [-4, -52],
+    hR: [10, -52],
+    kL: [-12, -27],
+    kR: [14, -26],
+    aL: [-20, 0],
+    aR: [12, 1],
+  },
+  caida: {
+    h: [-62, -10],
+    n: [-50, -9],
+    sL: [-44, -15],
+    sR: [-44, -4],
+    eL: [-30, -24],
+    eR: [-34, 6],
+    wL: [-16, -28],
+    wR: [-22, 10],
+    hL: [-6, -11],
+    hR: [-6, -5],
+    kL: [18, -18],
+    kR: [16, -4],
+    aL: [42, -12],
+    aR: [40, 2],
+  },
+};
+const SEGMENTS = [
+  ["n", "sL"],
+  ["n", "sR"],
+  ["sL", "eL"],
+  ["eL", "wL"],
+  ["sR", "eR"],
+  ["eR", "wR"],
+  ["sL", "hL"],
+  ["sR", "hR"],
+  ["hL", "hR"],
+  ["hL", "kL"],
+  ["kL", "aL"],
+  ["hR", "kR"],
+  ["kR", "aR"],
+] as const;
+const JOINTS = ["n", "sL", "sR", "eL", "eR", "wL", "wR", "hL", "hR", "kL", "kR", "aL", "aR"] as const;
+
+const fx = room === "Sala" ? 178 : 240;
+const fy = 182;
+const px = pose === "caida" ? fx + 8 : fx;
+
+function joint(k: string): Joint {
+  if (pose === "none") return [0, 0];
+  const p = POSES[pose][k] ?? [0, 0];
+  return [px + p[0], fy + p[1]];
+}
+
+const lines =
+  pose === "none"
+    ? []
+    : SEGMENTS.map(([a, b]) => {
+        const [x1, y1] = joint(a);
+        const [x2, y2] = joint(b);
+        return { x1, y1, x2, y2 };
+      });
+const dots = pose === "none" ? [] : JOINTS.map((k) => joint(k));
+const head = pose === "none" ? null : joint("h");
+
+const isPose = variant === "pose";
+const tone = isPose ? "#FFFFFF" : "#221A38";
+const jointFill = isPose ? "#FFB59C" : "#FFFFFF";
+const ringColor = pose === "caida" ? "#BF2A1B" : "#B07A00";
+const a11y = label ? { role: "img" as const, "aria-label": label } : { "aria-hidden": "true" as const };
+---
+
+<svg
+  viewBox="0 0 320 200"
+  preserveAspectRatio={fit === "slice" ? "xMidYMid slice" : "xMidYMid meet"}
+  class={className}
+  focusable="false"
+  {...a11y}
+>
+  {isPose ? (
+    <>
+      <rect width="320" height="200" fill="#1E1240" />
+      <path d="M0 148h320" stroke="#4A2A85" stroke-width="2" stroke-dasharray="4 6" />
+    </>
+  ) : (
+    <>
+      <rect width="320" height="200" fill={C.wall} />
+      <rect width="320" height="10" fill={C.wall2} />
+      <path d="M0 148h320v52H0Z" fill={C.floor} />
+      <path d="M0 148h320" stroke={C.f2} stroke-width="3" />
+      {room === "Sala" ? (
+        <>
+          <rect x="150" y="30" width="86" height="62" rx="4" fill={C.win} />
+          <path d="M193 30v62M150 61h86" stroke="#fff" stroke-width="3" />
+          <rect x="18" y="96" width="112" height="30" rx="10" fill={C.furn} />
+          <rect x="12" y="118" width="124" height="28" rx="8" fill={C.furn2} />
+          <rect x="18" y="146" width="6" height="8" fill={C.furn2} />
+          <rect x="124" y="146" width="6" height="8" fill={C.furn2} />
+          <path d="M286 60v88" stroke={C.furn2} stroke-width="3" />
+          <path d="M272 60h28l-6-20h-16Z" fill={C.wood} />
+          <ellipse cx="286" cy="150" rx="14" ry="3" fill={C.f2} />
+          <ellipse cx="190" cy="178" rx="96" ry="14" fill={C.f2} />
+        </>
+      ) : (
+        <>
+          <rect x="206" y="28" width="74" height="60" rx="4" fill={C.win} />
+          <path d="M243 28v60" stroke="#fff" stroke-width="3" />
+          <rect x="14" y="84" width="14" height="70" rx="4" fill={C.wood} />
+          <rect x="24" y="112" width="138" height="30" rx="8" fill="#EDE9F3" />
+          <rect x="24" y="130" width="138" height="20" rx="4" fill={C.furn2} />
+          <rect x="30" y="104" width="40" height="14" rx="6" fill="#fff" />
+        </>
+      )}
+      {webcam && (
+        <g>
+          <path d="M28 40h34" stroke={C.wood} stroke-width="4" stroke-linecap="round" />
+          <rect x="36" y="22" width="18" height="15" rx="7.5" fill="#4F4766" />
+          <circle cx="45" cy="29.5" r="3.6" fill="#E7E3EE" />
+          <circle cx="45" cy="29.5" r="1.6" fill="#4F4766" />
+          <path d="M45 37v3" stroke="#4F4766" stroke-width="2.5" />
+        </g>
+      )}
+    </>
+  )}
+  {ring && pose === "caida" && (
+    <ellipse
+      cx={fx - 10}
+      cy={fy - 7}
+      rx="72"
+      ry="26"
+      fill="none"
+      stroke={ringColor}
+      stroke-width="2.5"
+      stroke-dasharray="7 6"
+    />
+  )}
+  {ring && pose === "inestable" && (
+    <rect
+      x={fx - 52}
+      y={fy - 134}
+      width="104"
+      height="146"
+      rx="14"
+      fill="none"
+      stroke={ringColor}
+      stroke-width="2.5"
+      stroke-dasharray="7 6"
+    />
+  )}
+  {pose !== "none" && head && (
+    <g class:list={[sway && "skel-sway"]}>
+      {lines.map((l) => (
+        <line
+          x1={l.x1}
+          y1={l.y1}
+          x2={l.x2}
+          y2={l.y2}
+          stroke={tone}
+          stroke-width="3.2"
+          stroke-linecap="round"
+        />
+      ))}
+      <circle cx={head[0]} cy={head[1]} r="8" fill={jointFill} stroke={tone} stroke-width="3" />
+      {dots.map(([x, y]) => (
+        <circle cx={x} cy={y} r="3.4" fill={jointFill} stroke={tone} stroke-width="2" />
+      ))}
+    </g>
+  )}
+</svg>

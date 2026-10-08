@@ -1,0 +1,32 @@
+---
+import { es } from "../../content/es";
+import Icon from "../Icon.astro";
+import Mark from "../Mark.astro";
+
+const c = es.cta;
+---
+
+<section class="cta on-morado" aria-labelledby="cta-title">
+  <div class="wrap grid justify-items-center py-24 text-center lg:py-32">
+    <Mark tone="dark" play="view" class="cta-mark" />
+    <h2 id="cta-title" class="t-h2 mt-10 max-w-[18ch] text-white">
+      {c.title}
+    </h2>
+    <p class="t-lead mt-5 text-lila">{c.text}</p>
+    <a href="#descargas" class="btn btn-white mt-10">
+      <Icon name="download" />
+      {c.button}
+    </a>
+  </div>
+</section>
+
+<style>
+  .cta {
+    background: var(--color-morado);
+    color: #fff;
+  }
+  .cta :global(.cta-mark) {
+    width: clamp(7rem, 5rem + 8vw, 10rem);
+    height: auto;
+  }
+</style>

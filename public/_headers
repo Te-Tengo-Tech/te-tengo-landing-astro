@@ -1,0 +1,38 @@
+# Cloudflare Pages headers (https://developers.cloudflare.com/pages/configuration/headers/).
+# scripts/csp.mjs rewrites this file in dist/ after the build: the script-src placeholder becomes the
+# SHA-256 of every inline script Astro emitted, so the CSP needs no 'unsafe-inline' for scripts.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' SCRIPT_HASHES; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+
+# Hashed build assets never change.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/*
+  Cache-Control: public, max-age=2592000
+  Access-Control-Allow-Origin: *
+
+/icons/*
+  Cache-Control: public, max-age=604800
+
+/og.png
+  Cache-Control: public, max-age=604800
+
+# The Flutter PWA (deployed by publicar.yml). Its file names are not hashed and its own service
+# worker (scope /app/) handles caching, so always revalidate. Flutter and Firebase need their own
+# policy: detach the landing's CSP, COOP and Permissions-Policy here.
+/app/*
+  Cache-Control: no-cache
+  ! Content-Security-Policy
+  ! Cross-Origin-Opener-Policy
+  ! Permissions-Policy
+
+/app/flutter_service_worker.js
+  Cache-Control: no-store

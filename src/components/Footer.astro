@@ -1,0 +1,41 @@
+---
+import { es } from "../content/es";
+import Logo from "./Logo.astro";
+---
+
+<footer class="bg-ink text-lila on-morado">
+  <div class="wrap grid gap-10 py-14 md:grid-cols-[1.4fr_1fr] md:gap-16 lg:py-16">
+    <div class="space-y-5">
+      <Logo tone="dark" class="h-9 w-auto" />
+      <p class="max-w-[52ch] text-[0.9875rem] leading-relaxed">{es.footer.project}</p>
+      <p class="max-w-[52ch] text-[0.9875rem] leading-relaxed">{es.footer.privacy}</p>
+    </div>
+    <div class="grid content-start gap-8 sm:grid-cols-2">
+      <div>
+        <h2 class="mb-3 text-sm font-extrabold tracking-wide text-white uppercase">
+          {es.footer.authorsLabel}
+        </h2>
+        <ul class="space-y-1.5 text-[0.9875rem]">
+          {es.footer.authors.map((a) => (
+            <li>{a}</li>
+          ))}
+        </ul>
+      </div>
+      <nav aria-label={es.a11y.footerNav}>
+        <h2 class="mb-3 text-sm font-extrabold tracking-wide text-white uppercase">Te Tengo</h2>
+        <ul class="space-y-1.5 text-[0.9875rem]">
+          {es.footer.links.map((l) => (
+            <li>
+              <a href={l.href} class="underline decoration-white/30 hover:text-white hover:decoration-white">
+                {l.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </div>
+  </div>
+  <div class="border-t border-white/10">
+    <p class="wrap py-5 text-sm">UPC · {es.footer.year}</p>
+  </div>
+</footer>

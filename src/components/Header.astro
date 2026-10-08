@@ -1,0 +1,195 @@
+---
+import { es } from "../content/es";
+import Logo from "./Logo.astro";
+import Icon from "./Icon.astro";
+---
+
+<header class="site-header on-morado" data-header>
+  <div class="wrap flex h-16 items-center gap-4 lg:h-[4.5rem]">
+    <a href="/" class="-ml-1 flex h-11 items-center rounded-lg px-1" aria-label={es.a11y.home}>
+      <Logo tone="dark" play class="h-8 w-auto lg:h-9" />
+    </a>
+
+    <nav aria-label={es.a11y.mainNav} class="ml-auto flex items-center">
+      <button
+        type="button"
+        class="menu-toggle"
+        aria-expanded="false"
+        aria-controls="menu-principal"
+        data-menu-toggle
+        data-close-label={es.a11y.close}
+        hidden
+      >
+        <span class="menu-open">
+          <Icon name="menu" />
+        </span>
+        <span class="menu-close">
+          <Icon name="x" />
+        </span>
+        <span data-menu-label>{es.a11y.menu}</span>
+      </button>
+      <ul id="menu-principal" class="menu" data-menu>
+        {es.nav.map((item) => (
+          <li>
+            <a href={item.href} class="menu-link">
+              {item.label}
+            </a>
+          </li>
+        ))}
+        <li class="menu-cta">
+          <a href="/#descargas" class="btn btn-white min-h-11! px-4!">
+            <Icon name="download" />
+            {es.navCta}
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--color-morado);
+    color: #fff;
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.08);
+  }
+  .menu {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .menu-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: 0 0.85rem;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--color-lila);
+    text-decoration: none;
+    transition:
+      color 0.2s,
+      background-color 0.2s;
+  }
+  .menu-link:hover {
+    color: #fff;
+    background: rgb(255 255 255 / 0.08);
+  }
+  .menu-cta {
+    margin-left: 0.5rem;
+  }
+  .menu-toggle {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0 0.9rem 0 0.75rem;
+    border: 0;
+    border-radius: 12px;
+    background: rgb(255 255 255 / 0.1);
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .menu-close {
+    display: none;
+  }
+  .menu-toggle[aria-expanded="true"] .menu-open {
+    display: none;
+  }
+  .menu-toggle[aria-expanded="true"] .menu-close {
+    display: inline-flex;
+  }
+  .menu-open,
+  .menu-close {
+    display: inline-flex;
+  }
+  .menu-toggle[aria-expanded="false"] .menu-close {
+    display: none;
+  }
+
+  /* Without JS the links simply wrap; with JS they collapse behind the menu button. */
+  @media (max-width: 63.99rem) {
+    .menu-link {
+      padding: 0 0.6rem;
+    }
+    :global(.js) .menu-toggle {
+      display: inline-flex;
+    }
+    :global(.js) .menu {
+      position: absolute;
+      inset: 100% 0 auto 0;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.25rem;
+      padding: 0.75rem 1.25rem 1.5rem;
+      background: var(--color-morado);
+      box-shadow: 0 18px 30px -18px rgb(10 4 30 / 0.7);
+      border-top: 1px solid rgb(255 255 255 / 0.1);
+    }
+    :global(.js) .menu:not(.is-open) {
+      display: none;
+    }
+    :global(.js) .menu-link {
+      min-height: 3.25rem;
+      font-size: 1.125rem;
+      color: #fff;
+      padding: 0 0.75rem;
+    }
+    :global(.js) .menu-cta {
+      margin: 0.75rem 0 0;
+    }
+    :global(.js) .menu-cta .btn {
+      width: 100%;
+      min-height: 3.25rem !important;
+    }
+  }
+  @media (max-width: 63.99rem) {
+    html:not(.js) .site-header > .wrap {
+      height: auto;
+      flex-wrap: wrap;
+      padding-block: 0.5rem;
+    }
+    html:not(.js) .menu {
+      flex-wrap: wrap;
+    }
+  }
+</style>
+
+<script>
+  // Mobile navigation island: a disclosure button. Escape and following a link close it.
+  const toggle = document.querySelector<HTMLButtonElement>("[data-menu-toggle]");
+  const menu = document.querySelector<HTMLElement>("[data-menu]");
+  if (toggle && menu) {
+    document.documentElement.classList.add("js");
+    toggle.hidden = false;
+    const label = toggle.querySelector<HTMLElement>("[data-menu-label]");
+    const openText = label?.textContent ?? "Menú";
+    const set = (open: boolean) => {
+      toggle.setAttribute("aria-expanded", String(open));
+      menu.classList.toggle("is-open", open);
+      if (label) label.textContent = open ? (toggle.dataset["closeLabel"] ?? "Cerrar") : openText;
+    };
+    toggle.addEventListener("click", () => set(toggle.getAttribute("aria-expanded") !== "true"));
+    menu.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).closest("a")) set(false);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
+        set(false);
+        toggle.focus();
+      }
+    });
+    matchMedia("(min-width: 64rem)").addEventListener("change", (e) => {
+      if (e.matches) set(false);
+    });
+  }
+</script>

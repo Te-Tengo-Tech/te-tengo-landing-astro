@@ -2,7 +2,6 @@ name: Deploy
 
 # Builds the site and deploys it to Cloudflare Pages (project `te-tengo`, docs/DEPLOY.md):
 #   - push to main      → production deployment;
-#   - push to develop   → preview deployment on the `develop` branch alias;
 #   - pull requests     → preview deployment on the PR branch alias.
 # The Flutter PWA at /app/ is not built here: publicar.yml publishes it to R2 as
 # `te-tengo-web.tar.gz`, and every deployment unpacks the latest copy into dist/app/, because a
@@ -11,7 +10,7 @@ name: Deploy
 # notice with the setup steps and succeeds.
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 

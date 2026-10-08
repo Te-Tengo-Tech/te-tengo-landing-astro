@@ -12,11 +12,11 @@ Why the PWA tarball: a Pages deployment replaces the whole site. `publicar.yml` 
 
 ## Workflows
 
-| Workflow       | Trigger                                                   | Needs                                                                                                  |
-| -------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `ci.yml`       | push to `main`/`develop`, PRs                             | nothing                                                                                                |
-| `deploy.yml`   | push to `main` (production), `develop` and PRs (previews) | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variables `DESCARGAS_BASE_URL`, `SITE_URL` (optional) |
-| `publicar.yml` | **manual, from `main`, owner only**                       | everything below                                                                                       |
+| Workflow       | Trigger                                        | Needs                                                                                                  |
+| -------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ci.yml`       | push to `main`/`develop`, PRs                  | nothing                                                                                                |
+| `deploy.yml`   | push to `main` (production) and PRs (previews) | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variables `DESCARGAS_BASE_URL`, `SITE_URL` (optional) |
+| `publicar.yml` | **manual, from `main`, owner only**            | everything below                                                                                       |
 
 Every step whose secret or variable is missing prints a `::notice` with what to set and is skipped, so the workflows stay green before the setup is done.
 

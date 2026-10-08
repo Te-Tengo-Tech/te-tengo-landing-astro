@@ -70,7 +70,17 @@ const metrics = es.privacy.validation.metrics;
             </thead>
             <tbody>
               {v.table.rows.map((r) => (
-                <tr>{r.map((c, i) => (i === 0 ? <th scope="row">{c}</th> : <td class="mono">{c}</td>))}</tr>
+                <tr>
+                  {r.map((c, i) =>
+                    i === 0 ? (
+                      <th scope="row">{c}</th>
+                    ) : (
+                      <td class="mono" data-label={v.table.head[i]}>
+                        {c}
+                      </td>
+                    ),
+                  )}
+                </tr>
               ))}
             </tbody>
           </table>
@@ -181,7 +191,6 @@ const metrics = es.privacy.validation.metrics;
   }
   table {
     width: 100%;
-    min-width: 36rem;
     border-collapse: collapse;
     font-size: 1rem;
   }
@@ -227,6 +236,38 @@ const metrics = es.privacy.validation.metrics;
   .activities dd {
     color: var(--color-ink-2);
     font-weight: 700;
+  }
+  /* On phones each group becomes a small card, so nothing scrolls sideways. */
+  @media (max-width: 40rem) {
+    thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+    tbody tr {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-top: 1px solid var(--color-line);
+    }
+    tbody th {
+      grid-column: 1 / -1;
+      border-top: 0;
+    }
+    td {
+      border-top: 0;
+      text-align: left;
+      padding-top: 0.4rem;
+    }
+    td::before {
+      content: attr(data-label);
+      display: block;
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: var(--color-ink-3);
+    }
   }
   .refs {
     display: grid;

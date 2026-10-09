@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Smoke check of a landing deployment, run by deploy.yml after each Cloudflare Pages deploy.
+# Smoke check of a landing deployment, run by release.yml, produccion.yml and rollback.yml
+# after each Cloudflare Pages deploy.
 #
 #   scripts/smoke-check.sh <url> <canonical origin> [<index.html of the build>]
 #

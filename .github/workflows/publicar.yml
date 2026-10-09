@@ -32,6 +32,15 @@ run-name: >-
 # the default branch (main). All publishing jobs of a run wait at the same time, so one approval
 # covers them.
 #
+# SWITCHES (Actions variables, organization level; a repository variable with the same name wins).
+# Each publishing job runs only when its variable is exactly `true`; unset means off, and the job shows
+# as skipped (nothing asks for approval). The builds still run, so a release is always built and its
+# artifacts can be downloaded from the run:
+#   ENABLE_APK                 descargas-apk      te-tengo.apk to R2
+#   ENABLE_WINDOWS_INSTALLER   descargas-windows  te-tengo-captura-setup.exe to R2
+#   ENABLE_PWA                 app                the PWA to te-tengo-app
+#   ENABLE_LANDING_PRODUCCION  landing            the landing to te-tengo-landing (manual full runs)
+#
 # Secrets (Settings → Secrets and variables → Actions). Every step whose secret is missing emits a
 # ::notice and is skipped:
 #   TT_REPOS_TOKEN             fine-grained token, read-only Contents on te-tengo-mobile-flutter and
@@ -512,9 +521,13 @@ jobs:
       APK_VERSION: ${{ needs.android.outputs.version_name }} (${{ needs.android.outputs.version_code }})
       ALLOW_UNSIGNED: ${{ needs.preparar.outputs.permitir_apk_sin_firma }}
       VERSION_AGENTE: ${{ needs.windows.outputs.version_agente }}
+      ENABLE_APK: ${{ vars.ENABLE_APK }}
+      ENABLE_WINDOWS_INSTALLER: ${{ vars.ENABLE_WINDOWS_INSTALLER }}
+      ENABLE_PWA: ${{ vars.ENABLE_PWA }}
+      ENABLE_LANDING_PRODUCCION: ${{ vars.ENABLE_LANDING_PRODUCCION }}
     steps:
       - name: Refuse a debug-signed APK
-        if: env.MOVIL == 'true'
+        if: env.MOVIL == 'true' && env.ENABLE_APK == 'true'
         run: |
           if [ "$APK_SIGNED" != true ] && [ "$ALLOW_UNSIGNED" != true ]; then
             echo "::error title=APK not signed with the release key::A debug-signed APK cannot be updated by later builds. Add the four ANDROID_* secrets, or rerun by hand with permitir_apk_sin_firma=true for a throwaway test."
@@ -522,35 +535,60 @@ jobs:
           fi
       - name: What the approval will publish
         run: |
+          # destino <switch variable> <switch value> <needs R2: true|false> <verb>
+          destino() {
+            if [ "$2" != true ]; then
+              echo "skipped, switched off ($1 is not 'true')"
+            elif [ "$CLOUDFLARE" != true ]; then
+              echo "skipped, Cloudflare secrets missing"
+            elif [ "$3" = true ] && [ "$R2" != true ]; then
+              echo "skipped, DESCARGAS_R2_BUCKET missing"
+            else
+              echo "will be $4"
+            fi
+          }
           {
-            echo "## Waiting for approval on \`produccion\`"
-            echo "Approve it under **Review deployments** on this run's page. What will be published:"
-            echo
             if [ "$MOVIL" = true ]; then
               echo "- Android APK $APK_VERSION from $REPO_MOBILE@\`${SHA_MOBILE:0:12}\`${VERSION:+ (release $VERSION)}"
               echo "  - Signed with the release key: $APK_SIGNED; certificate SHA-256 \`$APK_CERT\` (must be the same in every release)"
-              echo "  - Destination: R2 \`te-tengo.apk\` — $([ "$CLOUDFLARE" = true ] && [ "$R2" = true ] && echo "will be uploaded" || echo "skipped, Cloudflare or DESCARGAS_R2_BUCKET missing")"
+              echo "  - Destination: R2 \`te-tengo.apk\` — $(destino ENABLE_APK "$ENABLE_APK" true uploaded)"
               if [ "$WEB" = success ]; then
-                echo "- PWA → $APP_PAGES_PROJECT (https://app.tetengo.reqsai.tech) — $([ "$CLOUDFLARE" = true ] && echo "will be deployed" || echo "skipped, Cloudflare secrets missing")"
+                echo "- PWA → $APP_PAGES_PROJECT (https://app.tetengo.reqsai.tech) — $(destino ENABLE_PWA "$ENABLE_PWA" false deployed)"
               else
                 echo "- PWA: not built in this run; the current deployment stays"
               fi
             fi
             if [ "$ESCRITORIO" = true ]; then
               echo "- Te Tengo Captura $VERSION_AGENTE (Windows installer) from $REPO_DESKTOP@\`${SHA_DESKTOP:0:12}\`"
-              echo "  - Destination: R2 \`te-tengo-captura-setup.exe\` — $([ "$CLOUDFLARE" = true ] && [ "$R2" = true ] && echo "will be uploaded" || echo "skipped, Cloudflare or DESCARGAS_R2_BUCKET missing")"
+              echo "  - Destination: R2 \`te-tengo-captura-setup.exe\` — $(destino ENABLE_WINDOWS_INSTALLER "$ENABLE_WINDOWS_INSTALLER" true uploaded)"
             fi
             if [ "$LANDING" = true ]; then
-              echo "- Landing → $PAGES_PROJECT (https://tetengo.reqsai.tech) — $([ "$CLOUDFLARE" = true ] && echo "will be deployed" || echo "skipped, Cloudflare secrets missing")"
+              echo "- Landing → $PAGES_PROJECT (https://tetengo.reqsai.tech) — $(destino ENABLE_LANDING_PRODUCCION "$ENABLE_LANDING_PRODUCCION" false deployed)"
             fi
+          } > "$RUNNER_TEMP/destinos.md"
+          if grep -q ' — will be ' "$RUNNER_TEMP/destinos.md"; then
+            titulo="## Waiting for approval on \`produccion\`"
+            texto="Approve it under **Review deployments** on this run's page. What will be published:"
+          else
+            titulo="## Nothing to publish"
+            texto="Every destination of this run is switched off or not configured, so nothing asks for approval. The builds stay as run artifacts:"
+            echo "::notice title=Nothing to publish::Every destination of this run is switched off or not configured; see the run summary."
+          fi
+          {
+            echo "$titulo"
+            echo "$texto"
+            echo
+            cat "$RUNNER_TEMP/destinos.md"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  descargas:
-    name: Upload the binaries to R2
-    needs: [preparar, android, windows, revisar]
+  # One job per binary, so each has its own switch. Both wait for the same approval as the PWA.
+  descargas-apk:
+    name: Upload the APK to R2
+    needs: [preparar, android, revisar]
     if: >-
-      !cancelled() && needs.revisar.result == 'success'
+      !cancelled() && needs.revisar.result == 'success' && needs.preparar.outputs.movil == 'true'
       && needs.preparar.outputs.cloudflare == 'true' && needs.preparar.outputs.r2 == 'true'
+      && vars.ENABLE_APK == 'true'
     environment:
       name: produccion
       url: https://tetengo.reqsai.tech/#descargas
@@ -565,12 +603,47 @@ jobs:
       DESCARGAS_BASE_URL: ${{ vars.DESCARGAS_BASE_URL }}
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: needs.preparar.outputs.movil == 'true'
         with:
           name: ${{ needs.android.outputs.artifact_name }}
           path: salida
+      - name: Upload to Cloudflare R2
+        working-directory: salida
+        run: |
+          set -euo pipefail
+          test -f te-tengo.apk
+          npx --yes "wrangler@$WRANGLER_VERSION" r2 object put "$R2_BUCKET/te-tengo.apk" --remote \
+            --file te-tengo.apk --content-type application/vnd.android.package-archive \
+            --cache-control "no-cache" --content-disposition 'attachment; filename="te-tengo.apk"'
+          if [ -f te-tengo.apk.sha256 ]; then
+            npx --yes "wrangler@$WRANGLER_VERSION" r2 object put "$R2_BUCKET/te-tengo.apk.sha256" --remote \
+              --file te-tengo.apk.sha256 --content-type "text/plain; charset=utf-8" --cache-control "no-cache"
+          fi
+          {
+            echo "## Uploaded to R2 ($R2_BUCKET)"
+            echo "- \`te-tengo.apk\`: ${DESCARGAS_BASE_URL:-<DESCARGAS_BASE_URL>}/te-tengo.apk"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  descargas-windows:
+    name: Upload the Windows installer to R2
+    needs: [preparar, windows, revisar]
+    if: >-
+      !cancelled() && needs.revisar.result == 'success' && needs.preparar.outputs.escritorio == 'true'
+      && needs.preparar.outputs.cloudflare == 'true' && needs.preparar.outputs.r2 == 'true'
+      && vars.ENABLE_WINDOWS_INSTALLER == 'true'
+    environment:
+      name: produccion
+      url: https://tetengo.reqsai.tech/#descargas
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_BUCKET: ${{ vars.DESCARGAS_R2_BUCKET }}
+      DESCARGAS_BASE_URL: ${{ vars.DESCARGAS_BASE_URL }}
+    steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: needs.preparar.outputs.escritorio == 'true'
         with:
           name: windows
           path: salida
@@ -578,19 +651,18 @@ jobs:
         working-directory: salida
         run: |
           set -euo pipefail
-          put() {
-            local file=$1 type=$2 disposition=$3
-            [ -f "$file" ] || return 0
-            npx --yes "wrangler@$WRANGLER_VERSION" r2 object put "$R2_BUCKET/$file" --remote \
-              --file "$file" --content-type "$type" --cache-control "no-cache" \
-              ${disposition:+--content-disposition "$disposition"}
-            echo "- \`$file\`: ${DESCARGAS_BASE_URL:-<DESCARGAS_BASE_URL>}/$file" >> "$GITHUB_STEP_SUMMARY"
-          }
-          echo "## Uploaded to R2 ($R2_BUCKET)" >> "$GITHUB_STEP_SUMMARY"
-          put te-tengo.apk application/vnd.android.package-archive 'attachment; filename="te-tengo.apk"'
-          put te-tengo.apk.sha256 "text/plain; charset=utf-8" ""
-          put te-tengo-captura-setup.exe application/vnd.microsoft.portable-executable 'attachment; filename="te-tengo-captura-setup.exe"'
-          put te-tengo-captura-setup.exe.sha256 "text/plain; charset=utf-8" ""
+          test -f te-tengo-captura-setup.exe
+          npx --yes "wrangler@$WRANGLER_VERSION" r2 object put "$R2_BUCKET/te-tengo-captura-setup.exe" --remote \
+            --file te-tengo-captura-setup.exe --content-type application/vnd.microsoft.portable-executable \
+            --cache-control "no-cache" --content-disposition 'attachment; filename="te-tengo-captura-setup.exe"'
+          if [ -f te-tengo-captura-setup.exe.sha256 ]; then
+            npx --yes "wrangler@$WRANGLER_VERSION" r2 object put "$R2_BUCKET/te-tengo-captura-setup.exe.sha256" --remote \
+              --file te-tengo-captura-setup.exe.sha256 --content-type "text/plain; charset=utf-8" --cache-control "no-cache"
+          fi
+          {
+            echo "## Uploaded to R2 ($R2_BUCKET)"
+            echo "- \`te-tengo-captura-setup.exe\`: ${DESCARGAS_BASE_URL:-<DESCARGAS_BASE_URL>}/te-tengo-captura-setup.exe"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   app:
     name: Deploy the PWA to Cloudflare Pages
@@ -599,7 +671,7 @@ jobs:
     # deployment untouched.
     if: >-
       !cancelled() && needs.revisar.result == 'success' && needs.web.result == 'success'
-      && needs.preparar.outputs.cloudflare == 'true'
+      && needs.preparar.outputs.cloudflare == 'true' && vars.ENABLE_PWA == 'true'
     environment:
       name: produccion
       url: https://app.tetengo.reqsai.tech
@@ -666,7 +738,7 @@ jobs:
     # Manual runs of every part only; deploy.yml deploys the landing on every push to main.
     if: >-
       !cancelled() && needs.revisar.result == 'success' && needs.preparar.outputs.landing == 'true'
-      && needs.preparar.outputs.cloudflare == 'true'
+      && needs.preparar.outputs.cloudflare == 'true' && vars.ENABLE_LANDING_PRODUCCION == 'true'
     environment:
       name: produccion
       url: https://tetengo.reqsai.tech

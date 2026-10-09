@@ -4,6 +4,10 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+### Changed
+
+- The Flutter PWA moved from `/app/` of the landing to its own Cloudflare Pages project, `te-tengo-app`, on `https://app.tetengo.reqsai.tech` (root path, hash routing). `publicar.yml` builds it with base href `/` and deploys it in a separate `app` job with `deploy/app/_headers` and `robots.txt`; the landing links to it through `APP_URL` (`PUBLIC_APP_URL`), and `/app/*` redirects there with a `301`. The PWA is no longer packed into R2 and `deploy.yml` no longer ships it.
+
 ### Added
 
 - Landing page in Astro 7 + Tailwind CSS v4, static, zero client JS by default: hero, problem (sourced figures), how it works, features, privacy and trust (with the validation results), for whom, downloads, FAQ, final call to action and footer. All copy in Spanish (Peru) in `src/content/es.ts`, each section tied to its source document.

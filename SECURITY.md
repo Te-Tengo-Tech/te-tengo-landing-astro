@@ -18,7 +18,7 @@ The repository is private, so GitHub's private vulnerability reporting is not av
 
 ## Practices
 
-- **Strict headers** (`public/_headers`): CSP without `unsafe-inline` scripts (hashes are generated at build time), `frame-ancestors 'none'`, HSTS, `nosniff`, a restrictive Permissions-Policy and COOP. The Flutter PWA under `/app/` has its own policy.
+- **Strict headers** (`public/_headers`): CSP without `unsafe-inline` scripts (hashes are generated at build time), `frame-ancestors 'none'`, HSTS, `nosniff`, a restrictive Permissions-Policy and COOP. The Flutter PWA is served from its own origin (`https://app.tetengo.reqsai.tech`) with its own policy (`deploy/app/_headers`).
 - **No third-party requests**: fonts, icons and images are self-hosted; there are no analytics or cookies.
 - **Workflows**: actions pinned to commit SHAs, `persist-credentials: false`, minimal `permissions` per job, inputs passed through `env`. `publicar.yml` only runs by manual dispatch from `main`; it never runs on pull requests, so no fork code can reach its secrets.
 - **Secrets never in git**: the Firebase web values are public but are stored as repository variables, not committed; the keystore, tokens and Cloudflare credentials are repository secrets.

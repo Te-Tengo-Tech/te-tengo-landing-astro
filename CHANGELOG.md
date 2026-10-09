@@ -4,6 +4,23 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+### Changed
+
+- Production deploys from `main` (the merged release pull request), no longer from the release branch, and the tag `vX.Y.Z` is created only after production succeeded.
+- `.github/actions/pages-deploy` downloads the bundle from a GitHub Release and checks its SHA-256 (against the candidate record and GitHub's upload digest) and its `dist/` fingerprint before deploying, instead of using an Actions artifact that expires.
+- The release branch name must equal `version` in `package.json` and `vX.Y.Z` must not exist yet; the candidate job fails otherwise (it only warned before). Hotfix branches are named `hotfix/x.y.z`.
+
+### Added
+
+- Release candidates, "model C + tag at the end" (docs/DEPLOY.md): `release.yml` runs on a push to `release/x.y.z` or `hotfix/x.y.z`, builds `dist/` once and stores it durably as the GitHub pre-release `vX.Y.Z-rc.N` (asset `te-tengo-landing-X.Y.Z.tar.gz` + `SHA256SUMS`; notes with the commit, the git tree hash, the SHA-256 of every asset, the `dist/` fingerprint and the build number), deploys that bundle to the alias `staging` (environment `staging`, switch `ENABLE_STAGING`, smoke check) and opens or updates the pull request `release: x.y.z` to `main`.
+- `produccion.yml`: on a push to `main` it finds the candidate whose recorded tree equals the tree of `main` (none → the run fails), deploys its bundle without rebuilding to `https://tetengo.reqsai.tech` (environment `produccion`, switch `ENABLE_LANDING_PRODUCCION`, smoke check) and only then creates the GitHub Release `vX.Y.Z` with the same assets and opens the back-merge pull request `main → develop`.
+- `rollback.yml`: manual, puts the bundle of an earlier final release back in production after the `produccion` approval.
+- `dist/version.json` (version, build, commit) in every bundle: `https://tetengo.reqsai.tech/version.json` tells what is live.
+
+### Removed
+
+- `deploy.yml` and `etiquetar.yml`, replaced by `release.yml` and `produccion.yml`.
+
 ### Added
 
 - Release flow in `deploy.yml` ("build once, deploy many", promoted from the release branch), with only two stages, staging and produccion: a push to `release/*` or `hotfix/*` builds once, deploys the same `landing-dist` artifact to the alias `staging` (environment `staging`, switch `ENABLE_STAGING`, smoke check), then to the Pages production branch `main` = `https://tetengo.reqsai.tech` (environment `produccion`, switch `ENABLE_LANDING_PRODUCCION`, smoke check, the release commit's hash and message attached), then opens the pull request `release/x.y.z → main` with `GITHUB_TOKEN`. Every deploy job runs the new composite action `.github/actions/pages-deploy` (fingerprint check, Wrangler deploy) and deploys nothing when a newer push superseded its commit; no deploying job is cancelled.

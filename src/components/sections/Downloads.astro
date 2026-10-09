@@ -6,11 +6,12 @@ import type { IconName } from "../icons";
 
 const d = es.downloads;
 
-type Key = "android" | "iphone" | "windows";
+type Key = "android" | "iphone" | "windows" | "mac";
 const options: { key: Key; icon: IconName; href: string | null; download: boolean }[] = [
   { key: "android", icon: "phone", href: DESCARGAS.android, download: true },
   { key: "iphone", icon: "phone", href: DESCARGAS.iphone, download: false },
   { key: "windows", icon: "pc", href: DESCARGAS.windows, download: true },
+  { key: "mac", icon: "pc", href: DESCARGAS.mac, download: true },
 ];
 ---
 
@@ -98,9 +99,9 @@ const options: { key: Key; icon: IconName; href: string | null; download: boolea
     gap: 1.25rem;
     list-style: none;
   }
-  @media (min-width: 64rem) {
+  @media (min-width: 48rem) {
     .options {
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       align-items: start;
     }
   }
@@ -233,7 +234,9 @@ const options: { key: Key; icon: IconName; href: string | null; download: boolea
         ? "iphone"
         : /Windows/i.test(ua)
           ? "windows"
-          : null;
+          : /Macintosh/.test(ua)
+            ? "mac"
+            : null;
     if (platform) {
       const option = list.querySelector<HTMLElement>(`[data-platform="${platform}"]`);
       if (option) {

@@ -67,7 +67,7 @@ To test the Cloudflare `_headers` and `_redirects` locally: `npx wrangler pages 
 ## Deploy
 
 - **CI** ([`ci.yml`](.github/workflows/ci.yml)): install, lint, `astro check`, build and Lighthouse CI on every push to `main`/`develop` and every pull request.
-- **Deploy** ([`deploy.yml`](.github/workflows/deploy.yml)): builds once, then `wrangler pages deploy` to the Pages project `te-tengo-landing` (custom domain `tetengo.reqsai.tech`): preview aliases on pull requests without approval, and production on every push to `main` after an approval on the `produccion` environment. Without the Cloudflare secrets it builds, explains what is missing and succeeds.
+- **Deploy** ([`deploy.yml`](.github/workflows/deploy.yml)): builds once and promotes that same artifact with `wrangler pages deploy` through the Pages project `te-tengo-landing` (custom domain `tetengo.reqsai.tech`). A push to `develop` deploys the `develop` alias after an approval on the `preview` environment; a push to `main` deploys the `release-candidate` alias (approval on `preview`, smoke check), then the same artifact to production (approval on `produccion`, smoke check). Pull requests get a preview alias without approval. Without the Cloudflare secrets it builds, explains what is missing and succeeds.
 - **Publicar** ([`publicar.yml`](.github/workflows/publicar.yml)): started by the app repositories when a release reaches their `main` (`repository_dispatch` `publicar-movil` or `publicar-escritorio`), or by hand from `main`. Builds the APK (through the mobile repository's reusable workflow) and the PWA (base href `/`), or the Windows installer, at the released commit; after an approval on `produccion` it uploads the binaries to R2 and deploys the PWA to the Pages project `te-tengo-app` (custom domain `app.tetengo.reqsai.tech`, with the headers in [`deploy/app/`](deploy/app/)).
 
 | Pages project      | Custom domain             | DNS record at the registrar (Namify)             |
@@ -81,11 +81,35 @@ The older `te-tengo` Pages project (Git-connected to the thesis repository, serv
 
 Nobody configures or runs anything by hand to publish: merging a release into `main` is enough, and the run then waits for one of the required reviewers of the `produccion` environment (jhosepmyr, elmer-riva) to approve it on its page (_Review deployments_), like a pull request.
 
-| Released to `main` in…       | Builds (no approval)                                       | Waits for approval, then publishes                        |
-| ---------------------------- | ---------------------------------------------------------- | --------------------------------------------------------- |
-| this repository              | `deploy.yml` → `Build`                                     | the landing → `https://tetengo.reqsai.tech`               |
-| `te-tengo-mobile-flutter`    | `publicar.yml` (`publicar-movil`) → APK and PWA            | `te-tengo.apk` in R2, the PWA → `app.tetengo.reqsai.tech` |
-| `te-tengo-desktop-pywebview` | `publicar.yml` (`publicar-escritorio`) → Windows installer | `te-tengo-captura-setup.exe` in R2                        |
+The landing is promoted in stages, always with the artifact of one build ([docs/DEPLOY.md](docs/DEPLOY.md#landing-promotion-build-once-deploy-many)):
+
+```text
+push to develop ─ Build ─▶ preview [approval] ─▶ https://develop.te-tengo-landing.pages.dev
+push to main    ─ Build ─▶ preview [approval] ─▶ https://release-candidate.te-tengo-landing.pages.dev (smoke check)
+                                 └─▶ produccion [approval] ─▶ https://tetengo.reqsai.tech (smoke check)
+pull request    ─ Build ─▶ branch alias, no environment, no approval
+```
+
+| Environment  | Required reviewers    | Branches | Used by                                                                                                    |
+| ------------ | --------------------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `preview`    | jhosepmyr, elmer-riva | any      | `deploy.yml` → `deploy-preview` (`develop` and `release-candidate` aliases)                                |
+| `produccion` | jhosepmyr, elmer-riva | `main`   | `deploy.yml` → `deploy-production`; `publicar.yml` → R2 uploads, the PWA and the manual landing deployment |
+
+Each channel also has an on/off switch, an organization Actions variable that must be exactly `true` (unset = off, the job shows as skipped):
+
+| Variable                    | Channel                                                           |
+| --------------------------- | ----------------------------------------------------------------- |
+| `ENABLE_LANDING_PREVIEW`    | Landing previews: `develop`, `release-candidate`, pull requests   |
+| `ENABLE_LANDING_PRODUCCION` | Landing production (`deploy.yml`, and manual `publicar.yml` runs) |
+| `ENABLE_PWA`                | PWA → `app.tetengo.reqsai.tech`                                   |
+| `ENABLE_APK`                | `te-tengo.apk` → R2                                               |
+| `ENABLE_WINDOWS_INSTALLER`  | `te-tengo-captura-setup.exe` → R2                                 |
+
+| Released to `main` in…       | Builds (no approval)                                                                 | Waits for approval, then publishes                        |
+| ---------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| this repository              | `deploy.yml` → `Build`, then the `release-candidate` preview (approval on `preview`) | the landing → `https://tetengo.reqsai.tech`               |
+| `te-tengo-mobile-flutter`    | `publicar.yml` (`publicar-movil`) → APK and PWA                                      | `te-tengo.apk` in R2, the PWA → `app.tetengo.reqsai.tech` |
+| `te-tengo-desktop-pywebview` | `publicar.yml` (`publicar-escritorio`) → Windows installer                           | `te-tengo-captura-setup.exe` in R2                        |
 
 The app repositories send the dispatch with their `DISPATCH_TOKEN` secret once their CI passes on `main`. Details, tokens and the manual fallback: [docs/DEPLOY.md](docs/DEPLOY.md#release--approval-flow).
 

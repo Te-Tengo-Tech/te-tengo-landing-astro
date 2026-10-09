@@ -1,6 +1,6 @@
 # Deploy: Cloudflare Pages, R2 and GitHub Actions
 
-The site and the Flutter PWA are served by **one Cloudflare Pages project** (`te-tengo`): the landing at `/`, the PWA at `/app/`. The binaries are too large for Pages (25 MiB per file; the Windows installer is about 105 MB), so they live in a **Cloudflare R2 bucket** with public read access, under stable keys:
+The site and the Flutter PWA are served by **one Cloudflare Pages project** (`te-tengo-landing`) on the custom domain `https://tetengo.reqsai.tech`: the landing at `/`, the PWA at `/app/`. (The older `te-tengo` project is Git-connected to the thesis repository and serves the prototypes; it is not touched by these workflows.) The binaries are too large for Pages (25 MiB per file; the Windows installer is about 105 MB), so they live in a **Cloudflare R2 bucket** with public read access, under stable keys:
 
 | Key in R2                                                         | What                                                                 |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -49,7 +49,15 @@ Dashboard → _My Profile_ → _API Tokens_ → _Create Token_ → _Create Custo
 
 ### 4. Pages project
 
-Nothing to do: the workflows create the project `te-tengo` (production branch `main`) on the first deploy. To create it by hand: `npx wrangler pages project create te-tengo --production-branch main`. Its default URL is `https://te-tengo.pages.dev`; a custom domain is added under _Workers & Pages_ → `te-tengo` → _Custom domains_ (then set `SITE_URL`).
+The project `te-tengo-landing` (production branch `main`) already exists; the workflows create it if it is missing. To create it by hand: `npx wrangler@4.149.0 pages project create te-tengo-landing --production-branch main --force` (`--force` makes recent Wrangler versions create a Pages project instead of delegating to Workers; only needed when creating). Its default URL is `https://te-tengo-landing.pages.dev`.
+
+Custom domain `tetengo.reqsai.tech` (the zone `reqsai.tech` is at the registrar's DNS, not on Cloudflare):
+
+1. _Workers & Pages_ → `te-tengo-landing` → _Custom domains_ → _Set up a custom domain_ → `tetengo.reqsai.tech`.
+2. At the registrar's DNS: `CNAME` `tetengo` → `te-tengo-landing.pages.dev`.
+3. Wait until Pages shows the domain as _Active_ (it validates the CNAME and issues the certificate).
+
+`SITE_URL` defaults to `https://tetengo.reqsai.tech`.
 
 ### 5. GitHub secrets and variables
 

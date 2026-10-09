@@ -4,7 +4,7 @@ import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 
 // Production URL. Override with SITE_URL until the custom domain is decided (docs/BLOCKERS.md).
-const site = process.env.SITE_URL || "https://te-tengo.pages.dev";
+const site = process.env.SITE_URL || "https://tetengo.reqsai.tech";
 
 export default defineConfig({
   site,

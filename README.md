@@ -58,7 +58,7 @@ To test the Cloudflare `_headers` and `_redirects` locally: `npx wrangler pages 
 
 | Variable (build time)       | Purpose                                                                                                                       |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `SITE_URL`                  | Canonical origin. Default `https://te-tengo.pages.dev` until the domain is decided                                            |
+| `SITE_URL`                  | Canonical origin. Default `https://tetengo.reqsai.tech`                                                                       |
 | `PUBLIC_DESCARGAS_BASE_URL` | Public URL of the R2 bucket with `te-tengo.apk` and `te-tengo-captura-setup.exe`. Empty → those downloads show «Próximamente» |
 
 `DESCARGAS_DISPONIBLES` in [`src/config/site.ts`](src/config/site.ts) switches every download to «Próximamente» at once.
@@ -66,7 +66,7 @@ To test the Cloudflare `_headers` and `_redirects` locally: `npx wrangler pages 
 ## Deploy
 
 - **CI** ([`ci.yml`](.github/workflows/ci.yml)): install, lint, `astro check`, build and Lighthouse CI on every push to `main`/`develop` and every pull request.
-- **Deploy** ([`deploy.yml`](.github/workflows/deploy.yml)): `wrangler pages deploy` to the Pages project `te-tengo`: production on `main`, preview aliases on pull requests. Without the Cloudflare secrets it builds, explains what is missing and succeeds.
+- **Deploy** ([`deploy.yml`](.github/workflows/deploy.yml)): `wrangler pages deploy` to the Pages project `te-tengo-landing` (custom domain `tetengo.reqsai.tech`): production on `main`, preview aliases on pull requests. Without the Cloudflare secrets it builds, explains what is missing and succeeds.
 - **Publicar** ([`publicar.yml`](.github/workflows/publicar.yml)): manual, owner only. Builds the APK (through the mobile repository's reusable workflow), the Windows installer and the PWA from the private repositories, uploads the binaries to R2 and deploys the site with the PWA under `/app/`.
 
 One-time Cloudflare and GitHub setup: [docs/DEPLOY.md](docs/DEPLOY.md). Open questions (domain, contact e-mail, legal pages): [docs/BLOCKERS.md](docs/BLOCKERS.md).

@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PAGES_PROJECT: te-tengo
+  PAGES_PROJECT: te-tengo-landing
   WRANGLER_VERSION: 4.149.0
 
 jobs:
@@ -93,7 +93,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if ! npx --yes "wrangler@$WRANGLER_VERSION" pages project list 2> /dev/null | grep -q " $PAGES_PROJECT "; then
-            npx --yes "wrangler@$WRANGLER_VERSION" pages project create "$PAGES_PROJECT" --production-branch main
+            npx --yes "wrangler@$WRANGLER_VERSION" pages project create "$PAGES_PROJECT" --production-branch main --force
           fi
 
       - name: Deploy to Cloudflare Pages

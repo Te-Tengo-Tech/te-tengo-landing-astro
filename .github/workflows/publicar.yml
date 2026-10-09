@@ -69,7 +69,7 @@ env:
   REPO_DESKTOP: te-tengo-desktop-pywebview
   FLUTTER_VERSION: 3.44.8
   WRANGLER_VERSION: 4.149.0
-  PAGES_PROJECT: te-tengo
+  PAGES_PROJECT: te-tengo-landing
 
 jobs:
   preparar:
@@ -458,7 +458,7 @@ jobs:
         if: env.HAS_CLOUDFLARE == 'true'
         run: |
           if ! npx --yes "wrangler@$WRANGLER_VERSION" pages project list 2> /dev/null | grep -q " $PAGES_PROJECT "; then
-            npx --yes "wrangler@$WRANGLER_VERSION" pages project create "$PAGES_PROJECT" --production-branch main
+            npx --yes "wrangler@$WRANGLER_VERSION" pages project create "$PAGES_PROJECT" --production-branch main --force
           fi
       - name: Deploy to Cloudflare Pages (production)
         id: pages

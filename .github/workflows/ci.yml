@@ -3,7 +3,8 @@ name: CI
 # Install, lint, type-check, build and run Lighthouse CI on the built site (budgets: every category
 # ≥ 0.95, lighthouserc.cjs). Runs on every pull request and every push to main, develop, release/*
 # and hotfix/*. The push run on a release branch also reports the checks on the commit of the
-# release pull request that deploy.yml opens with GITHUB_TOKEN (which starts no pull_request run).
+# release pull request that release.yml opens with GITHUB_TOKEN (which starts no pull_request run),
+# and the push run on main those of the back-merge pull request that produccion.yml opens.
 on:
   push:
     branches: [main, develop, "release/**", "hotfix/**"]

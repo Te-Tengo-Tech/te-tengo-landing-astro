@@ -1,0 +1,18 @@
+# Cloudflare Pages headers of the Flutter PWA (Pages project te-tengo-app,
+# https://app.tetengo.reqsai.tech). publicar.yml copies this folder into the Flutter build output
+# (build/web) before deploying it. Flutter and Firebase need their own policy, so the landing's CSP,
+# COOP and Permissions-Policy are not applied here.
+# File names are not hashed and the app's own service worker (firebase-messaging-sw.js, scope /)
+# caches network first, so everything revalidates.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Frame-Options: DENY
+  Cache-Control: no-cache
+
+# Flutter's deprecated worker is emitted but never registered (te-tengo-mobile-flutter
+# docs/WEB_PWA.md); never let a browser keep a stale copy.
+/flutter_service_worker.js
+  Cache-Control: no-store

@@ -1,0 +1,246 @@
+---
+import { DESCARGAS, DESCARGAS_DISPONIBLES, APP_URL } from "../../config/site";
+import { es } from "../../content/es";
+import Icon from "../Icon.astro";
+import type { IconName } from "../icons";
+
+const d = es.downloads;
+
+type Key = "android" | "iphone" | "windows";
+const options: { key: Key; icon: IconName; href: string | null; download: boolean }[] = [
+  { key: "android", icon: "phone", href: DESCARGAS.android, download: true },
+  { key: "iphone", icon: "phone", href: DESCARGAS.iphone, download: false },
+  { key: "windows", icon: "pc", href: DESCARGAS.windows, download: true },
+];
+---
+
+<section id="descargas" class="downloads" aria-labelledby="descargas-title">
+  <div class="wrap py-20 lg:py-28">
+    <div class="max-w-[46rem]">
+      <h2 id="descargas-title" class="t-h2">
+        {d.title}
+      </h2>
+      <p class="t-lead mt-5 text-ink-2">{d.lead}</p>
+    </div>
+
+    <ul class="options mt-14" role="list" data-downloads>
+      {options.map((o) => {
+        const copy = d.options[o.key];
+        const href = DESCARGAS_DISPONIBLES ? o.href : null;
+        return (
+          <li class="option" data-platform={o.key}>
+            <p class="detected" aria-hidden="true">
+              <Icon name="check" />
+              {d.detected}
+            </p>
+            <p class="option-platform">
+              <Icon name={o.icon} />
+              {copy.platform}
+            </p>
+            <h3 class="mt-3 text-[1.75rem] leading-tight font-extrabold tracking-tight">{copy.name}</h3>
+            <p class="mt-2 text-ink-2">{copy.text}</p>
+
+            <div class="mt-6">
+              {href ? (
+                <a class="btn btn-primary w-full" href={href} {...(o.download ? { download: "" } : {})}>
+                  <Icon name={o.download ? "download" : "arrowR"} />
+                  {copy.cta}
+                </a>
+              ) : (
+                <p class="btn btn-soon w-full" aria-disabled="true">
+                  <Icon name="clock" />
+                  {d.soon}
+                </p>
+              )}
+              {!href && <p class="t-meta mt-2 text-center">{d.soonNote}</p>}
+            </div>
+
+            {copy.steps.length > 0 && (
+              <details class="howto mt-6" open={o.key === "iphone"}>
+                <summary>
+                  {d.howTo}
+                  <Icon name="chevD" />
+                </summary>
+                <ol class="howto-steps" role="list">
+                  {copy.steps.map((s, i) => (
+                    <li>
+                      <span class="howto-n mono">{i + 1}</span>
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )}
+            <p class="note mt-5">
+              <Icon name="info" />
+              <span>{copy.note}</span>
+            </p>
+          </li>
+        );
+      })}
+    </ul>
+
+    <p class="mt-8 text-ink-2">
+      {d.web}
+      <a class="link ml-1" href={APP_URL}>
+        {d.webLink}
+      </a>
+    </p>
+  </div>
+</section>
+
+<style>
+  .downloads {
+    background: var(--color-ground);
+  }
+  .options {
+    display: grid;
+    gap: 1.25rem;
+    list-style: none;
+  }
+  @media (min-width: 64rem) {
+    .options {
+      grid-template-columns: repeat(3, 1fr);
+      align-items: start;
+    }
+  }
+  .option {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 1.75rem 1.5rem 1.5rem;
+    border-radius: var(--radius-card);
+    background: var(--color-card);
+    box-shadow: var(--shadow-1);
+    transition: box-shadow 0.3s var(--ease-out-expo);
+  }
+  .option-platform {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9875rem;
+    font-weight: 700;
+    color: var(--color-ink-2);
+  }
+  .option-platform :global(svg) {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  .detected {
+    display: none;
+    align-items: center;
+    gap: 0.35rem;
+    align-self: flex-start;
+    margin-bottom: 1rem;
+    padding: 0.25rem 0.7rem 0.25rem 0.5rem;
+    border-radius: 999px;
+    background: var(--color-morado);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 800;
+  }
+  .detected :global(svg) {
+    width: 1rem;
+    height: 1rem;
+  }
+  .option.is-detected {
+    box-shadow:
+      inset 0 0 0 3px var(--color-morado),
+      var(--shadow-2);
+  }
+  .option.is-detected .detected {
+    display: inline-flex;
+  }
+  .howto {
+    border-top: 1px solid var(--color-line);
+  }
+  .howto summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 3rem;
+    padding-top: 0.75rem;
+    font-weight: 800;
+    color: var(--color-morado-ink);
+    cursor: pointer;
+    list-style: none;
+  }
+  .howto summary::-webkit-details-marker {
+    display: none;
+  }
+  .howto summary :global(svg) {
+    width: 1.2rem;
+    height: 1.2rem;
+    transition: transform 0.25s var(--ease-out-expo);
+  }
+  .howto[open] summary :global(svg) {
+    transform: rotate(180deg);
+  }
+  .howto-steps {
+    display: grid;
+    gap: 0.75rem;
+    margin: 0.75rem 0 0;
+    list-style: none;
+    font-size: 0.9875rem;
+    line-height: 1.5;
+    color: var(--color-ink-2);
+  }
+  .howto-steps li {
+    display: grid;
+    grid-template-columns: 1.75rem 1fr;
+    gap: 0.6rem;
+  }
+  .howto-n {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--color-morado-soft);
+    color: var(--color-morado-ink);
+    font-weight: 700;
+    font-size: 0.875rem;
+  }
+  .note {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    padding: 0.85rem 1rem;
+    border-radius: 14px;
+    background: var(--color-ground);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--color-ink-2);
+  }
+  .note :global(svg) {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: none;
+    margin-top: 0.15rem;
+    color: var(--color-morado);
+  }
+</style>
+
+<script>
+  // Platform detection island: highlights the visitor's option. Everything works without it.
+  const list = document.querySelector<HTMLElement>("[data-downloads]");
+  if (list) {
+    const ua = navigator.userAgent;
+    const iPadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+    const platform = /Android/i.test(ua)
+      ? "android"
+      : /iPhone|iPad|iPod/i.test(ua) || iPadOS
+        ? "iphone"
+        : /Windows/i.test(ua)
+          ? "windows"
+          : null;
+    if (platform) {
+      const option = list.querySelector<HTMLElement>(`[data-platform="${platform}"]`);
+      if (option) {
+        option.classList.add("is-detected");
+        option.querySelector(".detected")?.removeAttribute("aria-hidden");
+        if (matchMedia("(max-width: 63.99rem)").matches) list.prepend(option);
+      }
+    }
+  }
+</script>

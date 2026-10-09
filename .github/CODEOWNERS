@@ -1,0 +1,11 @@
+# Owners are requested as reviewers on every pull request that touches matching files.
+# Format: <pattern> @<github-login>. The last matching pattern wins.
+
+*                         @jhosepmyr
+
+# Copy (every product claim needs a source), deployment and governance
+/src/content/             @jhosepmyr
+/public/_headers          @jhosepmyr
+/public/_redirects        @jhosepmyr
+/.github/                 @jhosepmyr
+/docs/DEPLOY.md           @jhosepmyr

@@ -1,0 +1,279 @@
+---
+import Base from "../layouts/Base.astro";
+import Icon from "../components/Icon.astro";
+import { es } from "../content/es";
+
+const v = es.validation;
+const metrics = es.privacy.validation.metrics;
+---
+
+<Base title={`${v.title} · Te Tengo`} description={v.description} path="/validacion/">
+  <article class="bg-card">
+    <header class="on-morado bg-morado text-white">
+      <div class="wrap py-16 lg:py-24">
+        <a href="/" class="inline-flex min-h-11 items-center gap-2 font-bold text-lila hover:text-white">
+          <Icon name="back" class="h-5 w-5" />
+          {v.back}
+        </a>
+        <h1 class="t-display mt-6 max-w-[18ch]">{v.title}</h1>
+        <p class="t-lead mt-6 max-w-[48ch] text-lila">{v.lead}</p>
+        <dl class="mt-10 flex flex-wrap gap-x-12 gap-y-6">
+          {metrics.map((m) => (
+            <div>
+              <dt class="text-sm font-extrabold tracking-wide text-lila uppercase">{m.label}</dt>
+              <dd class="mono m-0 mt-1 text-[3rem] leading-none font-bold tracking-tight">{m.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </header>
+
+    <div class="wrap doc py-16 lg:py-24">
+      <section aria-labelledby="v-data">
+        <h2 id="v-data">{v.sections.data}</h2>
+        <ul role="list" class="datasets">
+          {v.datasets.map((d) => (
+            <li>
+              <h3>
+                {d.name} <span class="cite">({d.cite})</span>
+              </h3>
+              <p>{d.text}</p>
+            </li>
+          ))}
+        </ul>
+        <p class="callout">
+          <Icon name="info" />
+          <span>{v.datasetsNote}</span>
+        </p>
+      </section>
+
+      <section aria-labelledby="v-protocol">
+        <h2 id="v-protocol">{v.sections.protocol}</h2>
+        <ol class="numbered">
+          {v.protocol.map((p) => (
+            <li>{p}</li>
+          ))}
+        </ol>
+      </section>
+
+      <section aria-labelledby="v-results">
+        <h2 id="v-results">{v.sections.results}</h2>
+        <div class="table-wrap" tabindex="0" role="region" aria-labelledby="v-caption">
+          <table>
+            <caption id="v-caption">{v.table.caption}</caption>
+            <thead>
+              <tr>
+                {v.table.head.map((h) => (
+                  <th scope="col">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {v.table.rows.map((r) => (
+                <tr>
+                  {r.map((c, i) =>
+                    i === 0 ? (
+                      <th scope="row">{c}</th>
+                    ) : (
+                      <td class="mono" data-label={v.table.head[i]}>
+                        {c}
+                      </td>
+                    ),
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <h3 class="mt-12">{v.sections.byActivity}</h3>
+        <dl class="activities">
+          {v.activities.map(([k, val]) => (
+            <div>
+              <dt>{k}</dt>
+              <dd>{val}</dd>
+            </div>
+          ))}
+        </dl>
+        <p class="mt-6">{v.extra}</p>
+      </section>
+
+      <section aria-labelledby="v-limits">
+        <h2 id="v-limits">{v.sections.limits}</h2>
+        <ol class="numbered">
+          {v.limits.map((l) => (
+            <li>{l}</li>
+          ))}
+        </ol>
+      </section>
+
+      <section aria-labelledby="v-refs">
+        <h2 id="v-refs">{v.sections.refs}</h2>
+        <ul role="list" class="refs">
+          {v.refs.map((r) => (
+            <li>
+              {r.text}{" "}
+              <a class="link" href={r.href} rel="noopener" target="_blank">
+                {r.href.replace("https://", "")}
+                <span class="sr-only"> {es.a11y.external}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  </article>
+</Base>
+
+<style>
+  .doc {
+    display: grid;
+    gap: 4rem;
+    max-width: 56rem;
+  }
+  .doc h2 {
+    font-size: clamp(1.75rem, 1.4rem + 1.4vw, 2.375rem);
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.25rem;
+  }
+  .doc h3 {
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+  .doc p,
+  .doc li {
+    color: var(--color-ink-2);
+    max-width: 68ch;
+  }
+  .datasets {
+    display: grid;
+    gap: 1.5rem;
+    list-style: none;
+  }
+  .datasets p {
+    margin-top: 0.4rem;
+  }
+  .cite {
+    font-weight: 400;
+    color: var(--color-ink-3);
+  }
+  .callout {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding: 1rem 1.25rem;
+    border-radius: 16px;
+    background: var(--color-morado-soft);
+    color: var(--color-morado-ink) !important;
+    font-weight: 700;
+  }
+  .callout :global(svg) {
+    width: 1.3rem;
+    height: 1.3rem;
+    flex: none;
+    margin-top: 0.1rem;
+  }
+  .numbered {
+    display: grid;
+    gap: 1rem;
+    padding-left: 1.4rem;
+  }
+  .numbered li::marker {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--color-morado);
+  }
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 18px;
+    box-shadow: inset 0 0 0 1px var(--color-line);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1rem;
+  }
+  caption {
+    padding: 1rem 1.25rem;
+    text-align: left;
+    color: var(--color-ink-3);
+    font-size: 0.9375rem;
+  }
+  th,
+  td {
+    padding: 0.8rem 1.25rem;
+    text-align: right;
+    border-top: 1px solid var(--color-line);
+  }
+  th:first-child {
+    text-align: left;
+  }
+  thead th {
+    font-size: 0.875rem;
+    color: var(--color-ink-2);
+    background: var(--color-ground);
+  }
+  tbody tr:first-child {
+    font-weight: 800;
+    background: var(--color-morado-soft);
+  }
+  .activities {
+    margin: 1rem 0 0;
+    border-top: 1px solid var(--color-line);
+  }
+  .activities > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.25rem 1.5rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .activities dt {
+    color: var(--color-ink);
+  }
+  .activities dd {
+    color: var(--color-ink-2);
+    font-weight: 700;
+  }
+  /* On phones each group becomes a small card, so nothing scrolls sideways. */
+  @media (max-width: 40rem) {
+    thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+    tbody tr {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-top: 1px solid var(--color-line);
+    }
+    tbody th {
+      grid-column: 1 / -1;
+      border-top: 0;
+    }
+    td {
+      border-top: 0;
+      text-align: left;
+      padding-top: 0.4rem;
+    }
+    td::before {
+      content: attr(data-label);
+      display: block;
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: var(--color-ink-3);
+    }
+  }
+  .refs {
+    display: grid;
+    gap: 1rem;
+    list-style: none;
+    font-size: 0.9875rem;
+    overflow-wrap: anywhere;
+  }
+</style>

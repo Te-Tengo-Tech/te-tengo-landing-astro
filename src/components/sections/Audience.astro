@@ -1,0 +1,79 @@
+---
+import { es } from "../../content/es";
+import Icon from "../Icon.astro";
+import type { IconName } from "../icons";
+
+const a = es.audience;
+---
+
+<section id="para-quien" class="bg-card" aria-labelledby="para-quien-title">
+  <div class="wrap py-20 lg:py-28">
+    <div class="max-w-[46rem]">
+      <h2 id="para-quien-title" class="t-h2">
+        {a.title}
+      </h2>
+      <p class="t-lead mt-5 text-ink-2">{a.lead}</p>
+    </div>
+    <ul class="roles mt-14" role="list">
+      {a.people.map((p, i) => (
+        <li class:list={["role", i === 1 && "role-senior"]}>
+          <span class="role-icon">
+            <Icon name={p.icon as IconName} />
+          </span>
+          <h3 class="mt-6 text-[1.5rem] leading-tight font-extrabold tracking-tight">{p.who}</h3>
+          <p class="mt-1 text-[1.1875rem] font-bold text-morado-ink">{p.title}</p>
+          <p class="mt-3 text-ink-2">{p.text}</p>
+        </li>
+      ))}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .roles {
+    display: grid;
+    list-style: none;
+    border-top: 2px solid var(--color-ink);
+  }
+  @media (min-width: 56rem) {
+    .roles {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  .role {
+    padding: 2rem 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+  @media (min-width: 56rem) {
+    .role {
+      padding: 2.25rem 2.25rem 0.5rem;
+      border-bottom: 0;
+    }
+    .role:first-child {
+      padding-left: 0;
+    }
+    .role + .role {
+      border-left: 1px solid var(--color-line);
+    }
+  }
+  .role p:last-child {
+    max-width: 38ch;
+  }
+  .role-icon {
+    display: grid;
+    place-items: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 18px;
+    background: var(--color-ground);
+    color: var(--color-morado-ink);
+  }
+  .role-icon :global(svg) {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+  .role-senior .role-icon {
+    background: var(--color-morado);
+    color: #fff;
+  }
+</style>

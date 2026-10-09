@@ -1,0 +1,360 @@
+---
+import { es } from "../../content/es";
+import Icon from "../Icon.astro";
+import Room from "../Room.astro";
+
+const h = es.how;
+---
+
+<section id="como-funciona" class="how" aria-labelledby="como-title">
+  <div class="wrap py-20 lg:py-28">
+    <div class="max-w-[46rem]">
+      <h2 id="como-title" class="t-h2">
+        {h.title}
+      </h2>
+      <p class="t-lead mt-5 text-ink-2">{h.lead}</p>
+    </div>
+
+    <ol class="steps mt-14" role="list" aria-label={h.stepsLabel}>
+      <li class="step">
+        <div class="step-art">
+          <div class="frame art-room">
+            <Room room="Sala" pose="pie" webcam label={h.illustrations.room} class="h-full w-full" />
+          </div>
+        </div>
+        <p class="step-n mono" aria-hidden="true">
+          1
+        </p>
+        <h3 class="t-h3 mt-3">{h.steps[0]?.title}</h3>
+        <p class="mt-2 text-ink-2">{h.steps[0]?.text}</p>
+      </li>
+
+      <li class="step">
+        <div class="step-art">
+          <div class="pc" role="img" aria-label={h.illustrations.pc}>
+            <div class="pc-screen">
+              <div class="pc-bar">
+                <img src="/favicon.svg" alt="" width="16" height="16" />
+                <span>{h.pcLabel}</span>
+                <span class="pc-state">
+                  <span class="pc-dot"></span>
+                  {h.pcState}
+                </span>
+              </div>
+              <div class="pc-view">
+                <Room room="Sala" pose="caida" ring fit="slice" class="h-full w-full" />
+              </div>
+            </div>
+            <div class="pc-stand"></div>
+          </div>
+        </div>
+        <p class="step-n mono" aria-hidden="true">
+          2
+        </p>
+        <h3 class="t-h3 mt-3">{h.steps[1]?.title}</h3>
+        <p class="mt-2 text-ink-2">{h.steps[1]?.text}</p>
+      </li>
+
+      <li class="step">
+        <div class="step-art">
+          <div class="phone" role="img" aria-label={h.illustrations.phone}>
+            <div class="phone-screen">
+              <p class="phone-time mono">10:42</p>
+              <div class="notif">
+                <img src="/favicon.svg" alt="" width="36" height="36" class="notif-icon" />
+                <div class="min-w-0">
+                  <p class="notif-top">
+                    <span>{h.notification.app}</span>
+                    <span>{h.notification.when}</span>
+                  </p>
+                  <p class="notif-title">{h.notification.title}</p>
+                  <p class="notif-body">{h.notification.body}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="step-n mono" aria-hidden="true">
+          3
+        </p>
+        <h3 class="t-h3 mt-3">{h.steps[2]?.title}</h3>
+        <p class="mt-2 text-ink-2">{h.steps[2]?.text}</p>
+      </li>
+    </ol>
+    <p class="t-meta mt-6">
+      {h.example}: {es.features.exampleNote.toLowerCase()}
+    </p>
+
+    <div class="live mt-16 lg:mt-20">
+      <div class="live-copy">
+        <h3 class="text-[1.625rem] leading-tight font-extrabold tracking-tight text-white lg:text-[2rem]">
+          {h.live.title}
+        </h3>
+        <p class="mt-4 max-w-[46ch] text-lila">{h.live.text}</p>
+        <ul class="mt-7 flex flex-wrap gap-2" role="list" aria-label={h.live.modesLabel}>
+          {h.live.modes.map((m, i) => (
+            <li class:list={["live-chip", i === 2 && "is-on"]}>
+              {i === 2 && <Icon name="check" />}
+              {m}
+            </li>
+          ))}
+        </ul>
+        <p class="mt-4 text-[0.9375rem] text-lila">{h.live.modesNote}</p>
+      </div>
+      <div class="live-art">
+        <div class="frame live-frame">
+          <Room variant="pose" pose="pie" sway class="h-full w-full" />
+          <span class="tag live-tag">
+            <span class="rec" aria-hidden="true"></span>
+            {h.live.liveTag} · <span class="mono">{h.live.liveTime}</span>
+          </span>
+          <span class="live-eye">
+            <Icon name="eye" />
+            {h.live.logged}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .how {
+    background: var(--color-ground);
+  }
+  .steps {
+    display: grid;
+    gap: 3rem 2rem;
+    list-style: none;
+  }
+  @media (min-width: 56rem) {
+    .steps {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  .step {
+    position: relative;
+  }
+  .step-art {
+    height: 15rem;
+    display: grid;
+    place-items: center;
+    margin-bottom: 1.75rem;
+    border-radius: var(--radius-card);
+    background: var(--color-card);
+    box-shadow: var(--shadow-1);
+    padding: 1.25rem;
+    overflow: hidden;
+  }
+  .step-n {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    background: var(--color-ink);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  /* Dashed connector between the step numbers: the order matters. */
+  @media (min-width: 56rem) {
+    .step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 17.875rem;
+      left: 3rem;
+      right: -1.25rem;
+      border-top: 2px dashed var(--color-line-2);
+    }
+  }
+  .art-room {
+    width: 100%;
+    height: 100%;
+    border-radius: 16px;
+  }
+
+  .pc {
+    width: min(100%, 17rem);
+    display: grid;
+    justify-items: center;
+  }
+  .pc-screen {
+    width: 100%;
+    border-radius: 14px;
+    background: var(--color-ground-2);
+    border: 6px solid var(--color-ink);
+    overflow: hidden;
+  }
+  .pc-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    background: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .pc-state {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--color-calma-ink);
+  }
+  .pc-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--color-calma);
+  }
+  .pc-view {
+    aspect-ratio: 16 / 9;
+  }
+  .pc-stand {
+    width: 4.5rem;
+    height: 1.4rem;
+    background: var(--color-ink);
+    clip-path: polygon(20% 0, 80% 0, 100% 100%, 0 100%);
+  }
+
+  .phone {
+    width: 12.5rem;
+    height: 20rem;
+    align-self: start;
+    margin-top: 1rem;
+    border-radius: 2rem;
+    background: #17121f;
+    padding: 0.45rem;
+    box-shadow: var(--shadow-2);
+  }
+  .phone-screen {
+    height: 100%;
+    border-radius: 1.6rem;
+    background: linear-gradient(#2b2150 0%, #3d2c66 40%, #5e3f7d 62%, #7a4f82 80%, #2d3c6b 100%);
+    padding: 1.1rem 0.55rem;
+    text-align: center;
+  }
+  .phone-time {
+    color: #fff;
+    font-size: 2.1rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+  .notif {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+    padding: 0.6rem;
+    border-radius: 1rem;
+    background: rgb(255 255 255 / 0.95);
+    text-align: left;
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
+  }
+  .notif-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.45rem;
+    flex: none;
+  }
+  .notif-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.4rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--color-ink-2);
+  }
+  .notif-title {
+    margin-top: 0.1rem;
+    font-size: 0.875rem;
+    font-weight: 800;
+    line-height: 1.3;
+    color: var(--color-ink);
+  }
+  .notif-body {
+    margin-top: 0.15rem;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: var(--color-ink-2);
+  }
+
+  .live {
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+    padding: 2rem 1.5rem;
+    border-radius: var(--radius-hero);
+    background: var(--color-morado-deep);
+    color: #fff;
+  }
+  @media (min-width: 56rem) {
+    .live {
+      grid-template-columns: 1.1fr 0.9fr;
+      padding: 3.5rem;
+      gap: 3.5rem;
+    }
+  }
+  .live-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 2.5rem;
+    padding: 0 0.95rem;
+    border-radius: 999px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--color-lila);
+    box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.25);
+  }
+  .live-chip.is-on {
+    background: #fff;
+    color: var(--color-morado-ink);
+    box-shadow: none;
+  }
+  .live-chip :global(svg) {
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+  .live-frame {
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-card);
+    background: #1e1240;
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.14),
+      var(--shadow-float);
+  }
+  .live-tag {
+    background: rgb(0 0 0 / 0.45);
+  }
+  .rec {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: #ff5a4a;
+  }
+  .live-eye {
+    position: absolute;
+    right: 0.875rem;
+    bottom: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem 0.35rem 0.55rem;
+    border-radius: 999px;
+    background: #fff;
+    color: var(--color-calma-ink);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+  .live-eye :global(svg) {
+    width: 1rem;
+    height: 1rem;
+  }
+</style>

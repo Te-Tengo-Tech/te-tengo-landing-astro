@@ -1,0 +1,44 @@
+---
+import Base from "../layouts/Base.astro";
+import { es } from "../content/es";
+import Hero from "../components/sections/Hero.astro";
+import Problem from "../components/sections/Problem.astro";
+import HowItWorks from "../components/sections/HowItWorks.astro";
+import Features from "../components/sections/Features.astro";
+import Privacy from "../components/sections/Privacy.astro";
+import Audience from "../components/sections/Audience.astro";
+import Downloads from "../components/sections/Downloads.astro";
+import Faq from "../components/sections/Faq.astro";
+import FinalCta from "../components/sections/FinalCta.astro";
+
+const site = Astro.site ?? new URL("https://tetengo.reqsai.tech");
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Te Tengo",
+  description: es.meta.description,
+  url: site.href,
+  image: new URL("/og.png", site).href,
+  applicationCategory: "HealthApplication",
+  operatingSystem: "Android, iOS, Windows 10, Windows 11",
+  inLanguage: "es-PE",
+  author: es.footer.authors.map((name) => ({ "@type": "Person", name })),
+  sourceOrganization: {
+    "@type": "CollegeOrUniversity",
+    name: "Universidad Peruana de Ciencias Aplicadas",
+    alternateName: "UPC",
+  },
+};
+---
+
+<Base title={es.meta.title} description={es.meta.description} path="/" jsonLd={jsonLd}>
+  <Hero />
+  <Problem />
+  <HowItWorks />
+  <Features />
+  <Privacy />
+  <Audience />
+  <Downloads />
+  <Faq />
+  <FinalCta />
+</Base>

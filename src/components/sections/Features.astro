@@ -1,0 +1,428 @@
+---
+import { es } from "../../content/es";
+import Icon from "../Icon.astro";
+import Room from "../Room.astro";
+import type { IconName } from "../icons";
+
+const f = es.features;
+---
+
+<section id="funciones" class="bg-card" aria-labelledby="funciones-title">
+  <div class="wrap py-20 lg:py-28">
+    <div class="max-w-[48rem]">
+      <h2 id="funciones-title" class="t-h2">
+        {f.title}
+      </h2>
+      <p class="t-lead mt-5 text-ink-2">{f.lead}</p>
+    </div>
+
+    <div class="mt-14 grid gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:gap-16">
+      <!-- The alert, as the family sees it -->
+      <div class="lg:sticky lg:top-28 lg:self-start">
+        <figure class="alert" aria-label={f.alertLabel}>
+          <div class="alert-head">
+            <span class="sev">
+              <Icon name="fall" />
+              {f.alert.severity}
+            </span>
+            <p class="alert-title">{f.alert.title}</p>
+            <p class="alert-conf">
+              <Icon name="clock" />
+              {f.alert.checking}
+            </p>
+            <dl class="slots">
+              {f.alert.slots.map((s) => (
+                <div>
+                  <dt>{s.k}</dt>
+                  <dd class:list={[s.mono && "mono"]}>{s.v}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <div class="alert-clip frame">
+            <Room room="Sala" pose="caida" ring class="h-full w-full" />
+            <span class="tag mono">{f.alert.clipTag}</span>
+          </div>
+        </figure>
+        <p class="example-label mt-3">
+          <Icon name="info" class="h-4 w-4" />
+          {f.exampleNote}
+        </p>
+      </div>
+
+      <!-- What happens, step by step -->
+      <div>
+        <h3 class="sr-only">{f.timelineLabel}</h3>
+        <ol class="timeline" role="list">
+          {f.timeline.map((t) => (
+            <li class={`tl tl-${t.tone}`}>
+              <span class="tl-icon">
+                <Icon name={t.icon as IconName} />
+              </span>
+              <div>
+                <h4 class="t-h3">{t.title}</h4>
+                <p class="mt-1.5 text-ink-2">{t.text}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+
+    <h3 class="mt-24 max-w-[30ch] text-[1.75rem] leading-tight font-extrabold tracking-tight lg:text-[2.25rem]">
+      {f.moreTitle}
+    </h3>
+    <div class="bento mt-10">
+      <article class="tile tile-clip">
+        <div class="tile-art">
+          <div class="frame aspect-[16/9]">
+            <Room room="Sala" pose="inestable" ring class="h-full w-full" />
+          </div>
+          <div class="clipbar" aria-hidden="true">
+            <span class="play">
+              <Icon name="play" />
+            </span>
+            <span class="track">
+              <i></i>
+              <span class="ev" title={f.clip.marker}></span>
+            </span>
+            <span class="mono text-sm text-ink-2">{f.clip.time}</span>
+          </div>
+        </div>
+        <h4 class="t-h3 mt-6">{f.clip.title}</h4>
+        <p class="mt-2 text-ink-2">{f.clip.text}</p>
+      </article>
+
+      <article class="tile tile-live">
+        <div class="tile-art">
+          <div class="logrow" aria-hidden="true">
+            <span class="avatar">CH</span>
+            <span class="min-w-0">
+              <span class="block font-extrabold">{f.live.row.name}</span>
+              <span class="block text-[0.9375rem] text-ink-2">{f.live.row.detail}</span>
+            </span>
+            <span class="logtag">{f.live.row.tag}</span>
+          </div>
+        </div>
+        <h4 class="t-h3 mt-6">{f.live.title}</h4>
+        <p class="mt-2 text-ink-2">{f.live.text}</p>
+      </article>
+
+      <article class="tile tile-family">
+        <div class="tile-art" aria-hidden="true">
+          <ul class="order" role="list">
+            {f.family.order.map((o) => (
+              <li>
+                <span class="order-n mono">{o.n}</span>
+                <span class="font-extrabold">{o.name}</span>
+                <span class="ml-auto text-[0.9375rem] text-ink-2">{o.role}</span>
+              </li>
+            ))}
+          </ul>
+          <p class="mt-4 text-sm font-bold text-ink-2">{f.family.waitLabel}</p>
+          <div class="mt-2 flex gap-2">
+            {f.family.waits.map((w) => (
+              <span class:list={["chip mono", w === f.family.waitDefault && "is-on"]}>{w}</span>
+            ))}
+          </div>
+        </div>
+        <h4 class="t-h3 mt-6">{f.family.title}</h4>
+        <p class="mt-2 text-ink-2">{f.family.text}</p>
+      </article>
+
+      <article class="tile tile-pause">
+        <div class="tile-art" aria-hidden="true">
+          <div class="pausecard">
+            <span class="pause-icon">
+              <Icon name="pause" />
+            </span>
+            <span>
+              <span class="block font-extrabold">{f.pause.chip}</span>
+              <span class="block text-[0.9375rem] text-ink-2">{f.pause.until}</span>
+            </span>
+          </div>
+        </div>
+        <h4 class="t-h3 mt-6">{f.pause.title}</h4>
+        <p class="mt-2 text-ink-2">{f.pause.text}</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<style>
+  .alert {
+    overflow: hidden;
+    border-radius: var(--radius-hero);
+    background: var(--color-caida);
+    color: #fff;
+    box-shadow: var(--shadow-2);
+  }
+  .alert-head {
+    padding: 1.5rem 1.5rem 1.25rem;
+  }
+  .sev {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem 0.3rem 0.55rem;
+    border-radius: 999px;
+    background: #fff;
+    color: var(--color-caida-ink);
+    font-size: 0.875rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .sev :global(svg),
+  .alert-conf :global(svg) {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+  .alert-title {
+    margin-top: 0.9rem;
+    font-size: clamp(1.75rem, 1.4rem + 1.4vw, 2.375rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  .alert-conf {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+    padding: 0.35rem 0.75rem 0.35rem 0.55rem;
+    border-radius: 10px;
+    background: rgb(0 0 0 / 0.22);
+    font-size: 0.9375rem;
+    font-weight: 800;
+  }
+  .slots {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin: 1.25rem 0 0;
+  }
+  .slots > div {
+    padding: 0.65rem 0.75rem;
+    border-radius: 14px;
+    background: rgb(0 0 0 / 0.18);
+  }
+  .slots dt {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #ffe3de;
+  }
+  .slots dd {
+    margin: 0.15rem 0 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+  .alert-clip {
+    aspect-ratio: 16 / 9;
+    border-radius: 0;
+  }
+
+  .timeline {
+    position: relative;
+    list-style: none;
+    display: grid;
+    gap: 0;
+  }
+  .tl {
+    position: relative;
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    gap: 1.25rem;
+    padding-bottom: 2.25rem;
+  }
+  .tl:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 1.5rem;
+    top: 3.25rem;
+    bottom: 0.25rem;
+    border-left: 2px solid var(--color-line);
+  }
+  .tl-icon {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 16px;
+  }
+  .tl-inestable .tl-icon {
+    background: var(--color-inestable-soft);
+    color: var(--color-inestable-ink);
+    box-shadow: inset 0 0 0 2px var(--color-inestable);
+  }
+  .tl-caida .tl-icon {
+    background: var(--color-caida-soft);
+    color: var(--color-caida-ink);
+  }
+  .tl-calma .tl-icon {
+    background: var(--color-calma-soft);
+    color: var(--color-calma-ink);
+  }
+  .tl-neutral .tl-icon {
+    background: var(--color-morado-soft);
+    color: var(--color-morado-ink);
+  }
+
+  .bento {
+    display: grid;
+    gap: 1.25rem;
+  }
+  @media (min-width: 48rem) {
+    .bento {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (min-width: 72rem) {
+    .bento {
+      grid-template-columns: 1.2fr 1fr 1fr;
+    }
+    .tile-pause {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 3rem;
+      align-items: center;
+    }
+    .tile-pause .tile-art {
+      grid-row: span 2;
+    }
+    .tile-pause h4 {
+      margin-top: 0;
+      align-self: end;
+    }
+    .tile-pause p {
+      align-self: start;
+    }
+  }
+  .tile {
+    padding: 1.5rem;
+    border-radius: var(--radius-card);
+    background: var(--color-ground);
+  }
+  .tile p {
+    max-width: 48ch;
+  }
+  .tile-clip .tile-art .frame {
+    border-radius: 16px;
+  }
+  .clipbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.75rem 0.5rem 0.5rem;
+    border-radius: 14px;
+    background: var(--color-card);
+  }
+  .play {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    background: var(--color-ink);
+    color: #fff;
+  }
+  .play :global(svg) {
+    width: 1rem;
+    height: 1rem;
+  }
+  .track {
+    position: relative;
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--color-line);
+  }
+  .track i {
+    position: absolute;
+    inset: 0 50% 0 0;
+    border-radius: 3px;
+    background: var(--color-ink);
+  }
+  .track .ev {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    translate: -50% -50%;
+    border-radius: 50%;
+    background: var(--color-inestable);
+    box-shadow: 0 0 0 3px #fff;
+  }
+  .logrow,
+  .pausecard {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.9rem 1rem;
+    border-radius: 16px;
+    background: var(--color-card);
+    box-shadow: var(--shadow-1);
+  }
+  .logrow {
+    flex-wrap: wrap;
+  }
+  .avatar {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: none;
+    border-radius: 50%;
+    background: var(--color-morado-soft);
+    color: var(--color-morado-ink);
+    font-weight: 800;
+  }
+  .logtag {
+    padding: 0.2rem 0.6rem;
+    border-radius: 8px;
+    background: var(--color-ground);
+    color: var(--color-ink-2);
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+  .order {
+    display: grid;
+    gap: 0.5rem;
+    list-style: none;
+  }
+  .order li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: 14px;
+    background: var(--color-card);
+  }
+  .order-n {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--color-ink);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.9375rem;
+  }
+  .pausecard {
+    background: repeating-linear-gradient(-45deg, #fff 0 10px, var(--color-pausa-soft) 10px 20px);
+  }
+  .pause-icon {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: none;
+    border-radius: 14px;
+    background: var(--color-pausa);
+    color: #fff;
+  }
+</style>

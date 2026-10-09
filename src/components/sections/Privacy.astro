@@ -1,0 +1,221 @@
+---
+import { es } from "../../content/es";
+import Icon from "../Icon.astro";
+import type { IconName } from "../icons";
+
+const p = es.privacy;
+const v = p.validation;
+const c = p.consent;
+---
+
+<section id="privacidad" class="privacy" aria-labelledby="privacidad-title">
+  <div class="wrap py-20 lg:py-28">
+    <div class="grid gap-14 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
+      <div class="lg:sticky lg:top-28 lg:self-start">
+        <h2 id="privacidad-title" class="t-h2 text-morado-ink">
+          {p.title}
+        </h2>
+        <p class="t-lead mt-6 max-w-[34ch] text-ink-2">{p.lead}</p>
+        <figure class="consent mt-10" aria-label={c.label}>
+          <span class="consent-band" aria-hidden="true"></span>
+          <p class="flex items-center gap-2 font-extrabold text-calma-ink">
+            <Icon name="check" class="h-5 w-5" />
+            {c.title}
+          </p>
+          <dl class="consent-rows">
+            {c.rows.map((r) => (
+              <div>
+                <dt>{r.k}</dt>
+                <dd class:list={[r.mono && "mono"]}>{r.v}</dd>
+              </div>
+            ))}
+          </dl>
+          <p class="t-meta mt-4">{c.law}</p>
+        </figure>
+        <p class="example-label mt-3">
+          <Icon name="info" class="h-4 w-4" />
+          {c.example}
+        </p>
+      </div>
+
+      <ul class="principles" role="list">
+        {p.items.map((item) => (
+          <li class="principle">
+            <span class="principle-icon">
+              <Icon name={item.icon as IconName} />
+            </span>
+            <div>
+              <h3 class="t-h3">{item.title}</h3>
+              <p class="mt-2 text-ink-2">{item.text}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <article class="proof mt-20" aria-labelledby="validacion-title">
+      <div class="proof-copy">
+        <h3
+          id="validacion-title"
+          class="text-[1.625rem] leading-tight font-extrabold tracking-tight lg:text-[2rem]"
+        >
+          {v.title}
+        </h3>
+        <p class="mt-4 max-w-[46ch] text-ink-2">{v.text}</p>
+        <p class="limits mt-6">
+          <Icon name="info" />
+          <span>{v.limits}</span>
+        </p>
+        <a href="/validacion/" class="btn btn-secondary mt-8">
+          {v.link}
+          <Icon name="arrowR" />
+        </a>
+      </div>
+      <dl class="metrics">
+        {v.metrics.map((m) => (
+          <div class="metric">
+            <dt class="text-[0.9375rem] font-extrabold tracking-wide text-ink-2 uppercase">{m.label}</dt>
+            <dd class="m-0">
+              <span class="metric-value">{m.value}</span>
+              <span class="mt-2 block text-ink-2">{m.text}</span>
+              <span class="meter" aria-hidden="true">
+                <i style={`width:${Number.parseFloat(m.value.replace(",", "."))}%`} />
+              </span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </article>
+  </div>
+</section>
+
+<style>
+  .privacy {
+    background: var(--color-morado-soft);
+  }
+  .principles {
+    list-style: none;
+    border-top: 2px solid rgb(74 42 133 / 0.25);
+  }
+  .principle {
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    gap: 1.25rem;
+    padding: 1.75rem 0;
+    border-bottom: 1px solid rgb(74 42 133 / 0.15);
+  }
+  .principle p {
+    max-width: 46ch;
+  }
+  .principle-icon {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 16px;
+    background: var(--color-morado);
+    color: #fff;
+  }
+  .consent {
+    position: relative;
+    max-width: 26rem;
+    padding: 1.6rem 1.4rem 1.25rem;
+    border-radius: var(--radius-card);
+    background: var(--color-card);
+    box-shadow: var(--shadow-2);
+    overflow: hidden;
+  }
+  .consent-band {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 6px;
+    background: var(--color-calma);
+  }
+  .consent-rows {
+    display: grid;
+    gap: 0.6rem;
+    margin: 1rem 0 0;
+  }
+  .consent-rows > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--color-line);
+    font-size: 0.9875rem;
+  }
+  .consent-rows dt {
+    color: var(--color-ink-3);
+  }
+  .consent-rows dd {
+    font-weight: 700;
+    text-align: right;
+  }
+  .proof {
+    display: grid;
+    gap: 2.5rem;
+    padding: 2rem 1.5rem;
+    border-radius: var(--radius-hero);
+    background: var(--color-card);
+    box-shadow: var(--shadow-1);
+  }
+  @media (min-width: 56rem) {
+    .proof {
+      grid-template-columns: 1.1fr 0.9fr;
+      padding: 3rem;
+      gap: 3.5rem;
+      align-items: center;
+    }
+  }
+  .limits {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    max-width: 52ch;
+    font-size: 0.9875rem;
+    line-height: 1.5;
+    color: var(--color-ink-2);
+  }
+  .limits :global(svg) {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex: none;
+    margin-top: 0.15rem;
+    color: var(--color-morado);
+  }
+  .metrics {
+    display: grid;
+    gap: 1.25rem;
+  }
+  .metric {
+    padding: 1.4rem 1.5rem;
+    border-radius: var(--radius-card);
+    background: var(--color-ground);
+  }
+  .metric-value {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    display: block;
+    margin-top: 0.4rem;
+    font-size: clamp(2.75rem, 2.3rem + 2vw, 3.75rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--color-morado);
+  }
+  .meter {
+    display: block;
+    height: 8px;
+    margin-top: 1rem;
+    border-radius: 4px;
+    background: var(--color-line);
+    overflow: hidden;
+  }
+  .meter i {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    background: var(--color-morado);
+  }
+</style>

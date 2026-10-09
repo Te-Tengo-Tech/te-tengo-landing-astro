@@ -1,0 +1,15 @@
+# Cloudflare Pages redirects (https://developers.cloudflare.com/pages/configuration/redirects/).
+# Short links to the downloads section.
+/descargas    /#descargas  301
+/descargas/   /#descargas  301
+/descargar    /#descargas  301
+/descargar/   /#descargas  301
+/download     /#descargas  301
+/download/    /#descargas  301
+
+# The Flutter PWA moved from /app/ of this site to its own origin (Pages project te-tengo-app).
+# Old links, including e-mailed ones like /app/#/nueva-contrasena?…, keep working: the browser
+# carries the #fragment over the redirect. /app/ is listed explicitly before the splat.
+/app      https://app.tetengo.reqsai.tech/        301
+/app/     https://app.tetengo.reqsai.tech/        301
+/app/*    https://app.tetengo.reqsai.tech/:splat  301

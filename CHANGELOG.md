@@ -6,12 +6,18 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ### Added
 
-- Landing promotion in `deploy.yml` ("build once, deploy many"): a push to `develop` deploys the build to the Pages alias `develop` in the `preview` environment; a push to `main` deploys it to the alias `release-candidate` (`deploy-preview`, `preview` environment) and then, with `needs: deploy-preview`, the same `landing-dist` artifact to production (`deploy-production`, `produccion` environment). Both stages wait for their environment's required reviewers, verify the artifact's fingerprint against the build job and end with `scripts/smoke-check.sh` (HTTP 200, canonical URL, byte-identical `index.html`). Pull request previews keep no environment, never deploy pull requests from forks, and use `pr-<number>` when the head branch is `develop` or `main`.
-- On/off switches for every deploy channel, as organization Actions variables that must be `true`: `ENABLE_LANDING_PREVIEW`, `ENABLE_LANDING_PRODUCCION`, `ENABLE_PWA`, `ENABLE_APK` and `ENABLE_WINDOWS_INSTALLER`. A switched-off job shows as skipped and asks for no approval.
+- Release flow in `deploy.yml` ("build once, deploy many", promoted from the release branch): a push to `develop` deploys the build to the Pages alias `develop` (job `dev`, environment `dev`, switch `ENABLE_DEV`); a push to `release/*` or `hotfix/*` builds once, deploys the same `landing-dist` artifact to the alias `staging` (environment `staging`, switch `ENABLE_STAGING`, smoke check), then to the Pages production branch `main` = `https://tetengo.reqsai.tech` (environment `produccion`, switch `ENABLE_LANDING_PRODUCCION`, smoke check, the release commit's hash and message attached), then opens the pull request `release/x.y.z → main` with `GITHUB_TOKEN`. Every deploy job runs the new composite action `.github/actions/pages-deploy` (fingerprint check, Wrangler deploy) and deploys nothing when a newer push superseded its commit; no deploying job is cancelled.
+- `etiquetar.yml`: on a push to `main`, the tag `vX.Y.Z` from `package.json` with a GitHub Release whose notes are the CHANGELOG section (skipped if the tag exists), and the back-merge pull request `main → develop`.
+- Downloads: **Mac (beta)** option for Te Tengo Captura (`te-tengo-captura.dmg` on `DESCARGAS_BASE_URL`), with «Próximamente» while downloads are off, platform detection for macOS and Apple's steps to open an app from an unidentified developer (source in `src/content/es.ts`). The section shows two columns from 48rem.
 
 ### Changed
 
-- `publicar.yml` uploads the APK and the Windows installer to R2 in two jobs, `descargas-apk` and `descargas-windows`, so each has its own switch; `revisar` lists which destinations are switched off.
+- Nothing deploys on a push to `main` any more; pull request previews are gated by `ENABLE_DEV` and still run without an environment. The `preview` environment, the `release-candidate` alias and `ENABLE_LANDING_PREVIEW` are no longer used.
+- `ci.yml` also runs on pushes to `release/*` and `hotfix/*`, so the release pull request opened by `GITHUB_TOKEN` has its checks.
+
+### Removed
+
+- `publicar.yml` and the `repository_dispatch` flow from the app repositories: the APK, the Windows installer, the Mac `.dmg` and the PWA are published by the release pipelines of `te-tengo-mobile-flutter` and `te-tengo-desktop-pywebview`.
 
 ## [0.2.0] - 2026-10-08
 

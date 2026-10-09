@@ -16,6 +16,10 @@
  *   [DESC]   te-tengo-descargas README (install steps)
  *   [BRAND]  Alba-docs/05-prototipos/marca/README.md
  *   [PWA]    te-tengo-mobile-flutter/docs/WEB_PWA.md (iPhone install steps, iOS 16.4 push)
+ *   [APPLE]  Apple, Mac User Guide, “Open a Mac app from an unknown developer” (mh40616):
+ *            https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac
+ *            (Spanish UI names from https://support.apple.com/es-mx/guide/mac-help/mh40616/mac),
+ *            read 2026-10-08. Mac install steps, paraphrased.
  */
 
 export const es = {
@@ -312,7 +316,9 @@ export const es = {
     ],
   },
 
-  // [DESC] install steps and copy; [PWA] iPhone steps and the iOS 16.4 push note
+  // [DESC] install steps and copy; [PWA] iPhone steps and the iOS 16.4 push note; [DESK] the agent
+  // also runs on macOS (README, «It also runs on macOS»); [APPLE] the Mac steps. The Mac build is a
+  // beta and not signed yet (docs/BLOCKERS.md).
   downloads: {
     title: "Descarga Te Tengo",
     lead: "La app del familiar o cuidador recibe las alertas de caída. El programa Te Tengo Captura va en la PC de la casa, con la cámara.",
@@ -354,6 +360,19 @@ export const es = {
         cta: "Descargar para Windows",
         steps: [],
         note: "La primera vez, Windows puede mostrar «Windows protegió su PC», porque el instalador aún no está firmado: elige «Más información» → «Ejecutar de todas formas».",
+      },
+      mac: {
+        platform: "PC de la casa · Mac (beta)",
+        name: "Te Tengo Captura",
+        text: "Lo instala el equipo del proyecto junto con la cámara.",
+        cta: "Descargar para Mac",
+        steps: [
+          "Abre el archivo descargado e intenta abrir Te Tengo Captura. Si macOS no lo deja abrir, cierra el aviso.",
+          "Ve al menú Apple → «Configuración del Sistema» → «Privacidad y seguridad».",
+          "En «Seguridad», haz clic en «Abrir de todos modos». El botón aparece durante una hora, más o menos, después de intentar abrir la app.",
+          "Ingresa tu contraseña de inicio de sesión y haz clic en «OK». Desde entonces se abre como cualquier otra app.",
+        ],
+        note: "La primera vez, macOS puede impedir que se abra, porque la app aún no está firmada: sigue los pasos de «Cómo instalar».",
       },
     },
     web: "¿Prefieres el navegador?",

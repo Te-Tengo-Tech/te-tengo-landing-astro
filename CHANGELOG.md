@@ -4,6 +4,8 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
 ### Added
 
 - Release flow in `deploy.yml` ("build once, deploy many", promoted from the release branch), with only two stages, staging and produccion: a push to `release/*` or `hotfix/*` builds once, deploys the same `landing-dist` artifact to the alias `staging` (environment `staging`, switch `ENABLE_STAGING`, smoke check), then to the Pages production branch `main` = `https://tetengo.reqsai.tech` (environment `produccion`, switch `ENABLE_LANDING_PRODUCCION`, smoke check, the release commit's hash and message attached), then opens the pull request `release/x.y.z → main` with `GITHUB_TOKEN`. Every deploy job runs the new composite action `.github/actions/pages-deploy` (fingerprint check, Wrangler deploy) and deploys nothing when a newer push superseded its commit; no deploying job is cancelled.

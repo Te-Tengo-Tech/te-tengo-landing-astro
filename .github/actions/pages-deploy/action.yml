@@ -1,8 +1,9 @@
-name: Deploy the landing build to Cloudflare Pages
+name: Deploy a landing release to Cloudflare Pages
 description: >-
-  Downloads the `landing-dist` artifact of this run into `dist/`, checks its fingerprint against the
-  build job and deploys it to one branch of the Pages project with Wrangler. It never builds. Used by
-  every deploy job of deploy.yml (docs/DEPLOY.md).
+  Downloads the dist/ bundle (tar.gz) stored as an asset of a GitHub Release (the pre-release
+  vX.Y.Z-rc.N of a candidate, or the final vX.Y.Z), checks its SHA-256 and the fingerprint of the
+  unpacked dist/, and deploys it to one branch of the Pages project with Wrangler. It never builds.
+  Used by release.yml (staging), produccion.yml and rollback.yml (docs/DEPLOY.md).
 
 inputs:
   branch:
@@ -10,22 +11,34 @@ inputs:
       Pages branch to deploy to. The production branch of the project (main) publishes the
       production site; any other name is a preview deployment at https://<alias>.<project>.pages.dev.
     required: true
+  release-tag:
+    description: Tag of the GitHub Release that holds the bundle (vX.Y.Z-rc.N or vX.Y.Z).
+    required: true
+  archive:
+    description: Name of the bundle asset, e.g. te-tengo-landing-0.4.0.tar.gz.
+    required: true
+  archive-sha256:
+    description: SHA-256 of the bundle, recorded when the candidate was built.
+    required: true
   expected-sha256:
-    description: Fingerprint of dist/ computed by the build job.
+    description: Fingerprint of dist/ (every path and content), recorded when the candidate was built.
     required: true
   commit-message:
-    description: Subject of the commit this run builds, attached to the Pages deployment.
+    description: Commit subject attached to the Pages deployment.
     required: true
+  commit-hash:
+    description: Commit attached to the Pages deployment. Default the run's commit.
+    required: false
+    default: ""
   head-ref:
     description: >-
-      Optional git branch (e.g. release/0.3.0). When set, nothing is deployed if that branch no longer
-      points at this run's commit: a newer push supersedes this run, also after an approval.
+      Optional git branch (e.g. release/0.4.0 or main). When set, nothing is deployed if that branch
+      no longer points at this run's commit: a newer push supersedes this run, also after an approval.
     required: false
     default: ""
   github-token:
-    description: Token that can read the repository (for the head-ref check).
-    required: false
-    default: ""
+    description: Token that can read the repository and its releases.
+    required: true
   cloudflare-api-token:
     description: Cloudflare API token (Cloudflare Pages · Edit).
     required: true
@@ -43,7 +56,7 @@ inputs:
 
 outputs:
   deployed:
-    description: "`true` when this action deployed the build."
+    description: "`true` when this action deployed the bundle."
     value: ${{ steps.pages.outputs.deployed || 'false' }}
   superseded:
     description: "`true` when head-ref points at a newer commit, so nothing was deployed."
@@ -70,32 +83,49 @@ runs:
         head=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)
         if [ "$head" != "$GITHUB_SHA" ]; then
           echo "superseded=true" >> "$GITHUB_OUTPUT"
-          echo "::notice title=Superseded, not deployed::${HEAD_REF} now points at ${head:0:12}; this run built ${GITHUB_SHA:0:12}. The run of the newer commit deploys instead."
+          echo "::notice title=Superseded, not deployed::${HEAD_REF} now points at ${head:0:12}; this run is for ${GITHUB_SHA:0:12}. The run of the newer commit deploys instead."
           echo "- Not deployed: \`${HEAD_REF}\` moved on to \`${head:0:12}\` (superseded by a newer push)" >> "$GITHUB_STEP_SUMMARY"
         else
           echo "superseded=false" >> "$GITHUB_OUTPUT"
         fi
 
-    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-      if: steps.head.outputs.superseded != 'true'
-      with:
-        name: landing-dist
-        path: dist
-
-    - name: Check that the artifact is the build of this run
+    # The bundle is the one built by the candidate job of release.yml. Three checks: the SHA-256 of
+    # the downloaded file against the value recorded at build time, the digest GitHub computed when
+    # the asset was uploaded, and the fingerprint of every unpacked file.
+    - name: Download and verify the bundle
       if: steps.head.outputs.superseded != 'true'
       shell: bash
-      working-directory: dist
       env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        TAG: ${{ inputs.release-tag }}
+        ARCHIVE: ${{ inputs.archive }}
+        ARCHIVE_SHA256: ${{ inputs.archive-sha256 }}
         EXPECTED: ${{ inputs.expected-sha256 }}
       run: |
         set -euo pipefail
-        sha=$(find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
-        if [ "$sha" != "$EXPECTED" ]; then
-          echo "::error title=Artifact changed::dist/ fingerprint $sha, the build job produced $EXPECTED."
+        dir="$RUNNER_TEMP/bundle"
+        rm -rf "$dir" dist
+        mkdir -p "$dir" dist
+        gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ARCHIVE" --dir "$dir"
+        sha=$(sha256sum "$dir/$ARCHIVE" | cut -d' ' -f1)
+        if [ "$sha" != "$ARCHIVE_SHA256" ]; then
+          echo "::error title=Bundle changed::${ARCHIVE} of ${TAG} has SHA-256 ${sha}; the candidate recorded ${ARCHIVE_SHA256}."
           exit 1
         fi
-        echo "Fingerprint $sha matches the build job."
+        digest=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+          --jq '.assets[] | select(.name == env.ARCHIVE) | .digest // ""')
+        if [ -n "$digest" ] && [ "$digest" != "sha256:${ARCHIVE_SHA256}" ]; then
+          echo "::error title=Bundle changed::GitHub reports ${digest} for ${ARCHIVE} of ${TAG}; the candidate recorded sha256:${ARCHIVE_SHA256}."
+          exit 1
+        fi
+        tar -xzf "$dir/$ARCHIVE" -C dist --no-same-owner
+        fingerprint=$(cd dist && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+        if [ "$fingerprint" != "$EXPECTED" ]; then
+          echo "::error title=Bundle changed::dist/ fingerprint ${fingerprint}; the candidate recorded ${EXPECTED}."
+          exit 1
+        fi
+        echo "Bundle ${ARCHIVE} of ${TAG}: SHA-256 ${sha}, fingerprint ${fingerprint}, both as recorded."
+        echo "- Bundle \`${ARCHIVE}\` of \`${TAG}\`: SHA-256 \`${sha:0:16}\`, dist/ fingerprint \`${fingerprint:0:16}\` (verified)" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Create the Pages project if it does not exist
       if: steps.head.outputs.superseded != 'true'
@@ -112,8 +142,7 @@ runs:
 
     # Wrangler through npx, outside the project's pnpm install: cloudflare/wrangler-action adds wrangler
     # with pnpm, whose build-script policy blocks esbuild/workerd (ERR_PNPM_IGNORED_BUILDS). The commit
-    # metadata is passed explicitly, so a release commit deployed to the production branch (main) is
-    # listed under its own hash and message, not under whatever git reports in the runner.
+    # metadata is passed explicitly, so the dashboard lists the deployment under the right commit.
     - name: Deploy to Cloudflare Pages
       id: pages
       if: steps.head.outputs.superseded != 'true'
@@ -124,11 +153,12 @@ runs:
         PROJECT: ${{ inputs.project }}
         WRANGLER_VERSION: ${{ inputs.wrangler-version }}
         BRANCH: ${{ inputs.branch }}
+        COMMIT_HASH: ${{ inputs.commit-hash || github.sha }}
         COMMIT_MESSAGE: ${{ inputs.commit-message }}
       run: |
         set -euo pipefail
         npx --yes "wrangler@$WRANGLER_VERSION" pages deploy dist --project-name="$PROJECT" \
-          --branch="$BRANCH" --commit-hash="$GITHUB_SHA" --commit-message="$COMMIT_MESSAGE" \
+          --branch="$BRANCH" --commit-hash="$COMMIT_HASH" --commit-message="$COMMIT_MESSAGE" \
           --commit-dirty=false | tee "$RUNNER_TEMP/pages-deploy.log"
         url=$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' "$RUNNER_TEMP/pages-deploy.log" | head -n1 || true)
         alias=""

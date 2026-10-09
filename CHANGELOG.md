@@ -4,6 +4,8 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-09
+
 ### Changed
 
 - Production deploys from `main` (the merged release pull request), no longer from the release branch, and the tag `vX.Y.Z` is created only after production succeeded.

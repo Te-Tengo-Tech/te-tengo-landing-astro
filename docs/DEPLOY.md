@@ -2,10 +2,10 @@
 
 The landing and the Flutter PWA are **two Cloudflare Pages projects**, each on its own custom domain:
 
-| Pages project      | Custom domain                     | Content                                 | Deployed by                                                                                        |
-| ------------------ | --------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `te-tengo-landing` | `https://tetengo.reqsai.tech`     | This Astro site                         | `deploy.yml` of this repository (`develop`, `release/*`, `hotfix/*`, pull request previews)        |
-| `te-tengo-app`     | `https://app.tetengo.reqsai.tech` | The Flutter PWA, at the root path (`/`) | The release pipeline of `te-tengo-mobile-flutter` (alias `staging`, then production branch `main`) |
+| Pages project      | Custom domain                     | Content                                 | Deployed by                                                                                               |
+| ------------------ | --------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `te-tengo-landing` | `https://tetengo.reqsai.tech`     | This Astro site                         | `deploy.yml` of this repository (`release/*`, `hotfix/*`: alias `staging`, then production branch `main`) |
+| `te-tengo-app`     | `https://app.tetengo.reqsai.tech` | The Flutter PWA, at the root path (`/`) | The release pipeline of `te-tengo-mobile-flutter` (alias `staging`, then production branch `main`)        |
 
 The older `te-tengo` project is Git-connected to the thesis repository and serves the prototypes; these workflows never touch it.
 
@@ -23,11 +23,13 @@ An old `te-tengo-web.tar.gz` object in the bucket is unused and can be deleted b
 
 ## Workflows
 
-| Workflow        | Trigger                                                    | Approval (environment)                                                                  | Needs                                                                                                                                                                             |
-| --------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`        | push to `main`, `develop`, `release/*`, `hotfix/*`; PRs    | no                                                                                      | nothing                                                                                                                                                                           |
-| `deploy.yml`    | push to `develop`, `release/*`, `hotfix/*`; PRs (previews) | `dev` (develop), `staging` and `produccion` (release/hotfix); PR previews deploy freely | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variables `ENABLE_DEV`, `ENABLE_STAGING`, `ENABLE_LANDING_PRODUCCION`, `DESCARGAS_BASE_URL`, `SITE_URL` and `APP_URL` (optional) |
-| `etiquetar.yml` | push to `main`                                             | no (deploys nothing)                                                                    | `GITHUB_TOKEN` only                                                                                                                                                               |
+| Workflow        | Trigger                                                 | Approval (environment)       | Needs                                                                                                                                                               |
+| --------------- | ------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`        | push to `main`, `develop`, `release/*`, `hotfix/*`; PRs | no                           | nothing                                                                                                                                                             |
+| `deploy.yml`    | push to `release/*`, `hotfix/*`                         | `staging`, then `produccion` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variables `ENABLE_STAGING`, `ENABLE_LANDING_PRODUCCION`, `DESCARGAS_BASE_URL`, `SITE_URL` and `APP_URL` (optional) |
+| `etiquetar.yml` | push to `main`                                          | no (deploys nothing)         | `GITHUB_TOKEN` only                                                                                                                                                 |
+
+Pull requests and pushes to `develop` only run `ci.yml`: there is no dev stage and no pull request preview.
 
 Every step whose secret or variable is missing prints a `::notice` with what to set and is skipped, so the workflows stay green before the setup is done.
 
@@ -37,7 +39,6 @@ Each stage has an on/off switch: an **organization-level Actions variable** (_Or
 
 | Variable                    | Job of `deploy.yml` | What it deploys                                                                    |
 | --------------------------- | ------------------- | ---------------------------------------------------------------------------------- |
-| `ENABLE_DEV`                | `dev`, `pr-preview` | The `develop` alias and the pull request aliases of `te-tengo-landing`             |
 | `ENABLE_STAGING`            | `staging`           | The `staging` alias (`https://staging.te-tengo-landing.pages.dev`)                 |
 | `ENABLE_LANDING_PRODUCCION` | `produccion`        | The production branch `main` of `te-tengo-landing` = `https://tetengo.reqsai.tech` |
 
@@ -54,9 +55,6 @@ With `ENABLE_STAGING` off, a release branch skips staging and `produccion` only 
 
 ```mermaid
 flowchart LR
-  subgraph dev["push to develop"]
-    B1[Build] --> D1["dev<br/>env dev · approval<br/>alias develop + smoke check"]
-  end
   subgraph rel["push to release/x.y.z or hotfix/x.y.z"]
     B2[Build] --> S2["staging<br/>env staging · approval<br/>alias staging + smoke check"]
     S2 --> P2["produccion<br/>env produccion · approval<br/>branch main = tetengo.reqsai.tech + smoke check"]
@@ -65,30 +63,27 @@ flowchart LR
   subgraph main["push to main (merged release PR)"]
     T3["etiquetar.yml<br/>tag vX.Y.Z + GitHub Release"] --> M3["PR main → develop"]
   end
-  subgraph pr["pull request"]
-    B4[Build] --> V4["pr-preview<br/>no environment, no approval<br/>alias of the PR branch"]
+  subgraph dev["push to develop, pull request"]
+    C4["ci.yml only<br/>nothing deploys"]
   end
   R2 -. "merged by a person" .-> T3
-  M3 -. "merged by a person" .-> B1
+  M3 -. "merged by a person" .-> C4
 ```
 
-| Event                             | Jobs                                                                                     | Environment (approval)                                                    | URL                                                                                                     |
-| --------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| push to `develop`                 | `Build` → `dev`                                                                          | `dev` (jhosepmyr or elmer-riva)                                           | `https://develop.te-tengo-landing.pages.dev`                                                            |
-| push to `release/*` or `hotfix/*` | `Build` → `staging` → `produccion` → `release-pr`                                        | `staging`, then `produccion` (jhosepmyr or elmer-riva); `release-pr` none | `https://staging.te-tengo-landing.pages.dev`, then `https://tetengo.reqsai.tech`; then the PR to `main` |
-| push to `main`                    | `etiquetar.yml` only (`deploy.yml` does not run)                                         | none                                                                      | tag `vX.Y.Z`, GitHub Release, PR `main → develop`                                                       |
-| pull request from this repository | `Build` → `pr-preview`                                                                   | none                                                                      | `https://<branch>.te-tengo-landing.pages.dev` (`pr-<number>` for `main`/`develop`/`staging` heads)      |
-| pull request from a fork          | `Build` only                                                                             | none                                                                      | none: forks get no secrets and `pr-preview` refuses them                                                |
-| manual run                        | as a push to the branch it runs on; `main`: `Build` only; any other branch: `pr-preview` | as above                                                                  | as above                                                                                                |
+| Event                             | Jobs                                              | Environment (approval)                                                    | URL                                                                                                     |
+| --------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| push to `release/*` or `hotfix/*` | `Build` → `staging` → `produccion` → `release-pr` | `staging`, then `produccion` (jhosepmyr or elmer-riva); `release-pr` none | `https://staging.te-tengo-landing.pages.dev`, then `https://tetengo.reqsai.tech`; then the PR to `main` |
+| push to `main`                    | `etiquetar.yml` only (`deploy.yml` does not run)  | none                                                                      | tag `vX.Y.Z`, GitHub Release, PR `main → develop`                                                       |
+| push to `develop`, pull request   | `ci.yml` only (`deploy.yml` does not run)         | none                                                                      | none: no dev stage, no pull request preview                                                             |
 
-- **Stages.** `develop` and `staging` are Pages _preview_ branches (aliases); the production branch of the project is `main`. `dev`, `staging` and `produccion` all end with `scripts/smoke-check.sh`: the URL must answer `200`, carry `<link rel="canonical" href="https://tetengo.reqsai.tech/">` (or `SITE_URL`) and be byte for byte the `index.html` of the artifact (Pages serves the uploaded HTML unchanged), with retries for about a minute. A failed staging smoke check stops the promotion; a failed production smoke check marks the run failed after the deployment (roll back under _Workers & Pages → te-tengo-landing → Deployments_ if needed).
+- **Stages.** There are two: `staging`, a Pages _preview_ branch (alias), and `produccion`, the production branch `main` of the project. There is no dev stage and no pull request preview. Both end with `scripts/smoke-check.sh`: the URL must answer `200`, carry `<link rel="canonical" href="https://tetengo.reqsai.tech/">` (or `SITE_URL`) and be byte for byte the `index.html` of the artifact (Pages serves the uploaded HTML unchanged), with retries for about a minute. A failed staging smoke check stops the promotion; a failed production smoke check marks the run failed after the deployment (roll back under _Workers & Pages → te-tengo-landing → Deployments_ if needed).
 - **Production from the release branch.** `produccion` deploys the release commit with `wrangler pages deploy --branch=main`, which is what publishes `https://tetengo.reqsai.tech`. The Pages deployment keeps the release commit's hash (`--commit-hash`) and subject (`--commit-message`, from the build job) and `--commit-dirty=false`, so the dashboard shows the release commit even though git's `main` only receives it later through the release pull request.
 - **Same build, same commit.** `produccion` needs `staging` (or only the build when `ENABLE_STAGING` is off), downloads the same `landing-dist` and verifies the same fingerprint. The run summary lists the fingerprint and the alias it was promoted from.
 - **The release pull request.** `release-pr` runs once production succeeded, or was skipped by its switch or by missing Cloudflare secrets, and nothing failed. It opens `release/x.y.z → main` (title `release: x.y.z`, from the branch name) with `GITHUB_TOKEN` and lists what was deployed where; if that pull request is already open, it adds a comment with the new run instead. Merging it is a human action (the `proteger-main` ruleset requires a review). A pull request opened with `GITHUB_TOKEN` starts no `pull_request` workflows, so its required check `Lint, types and build` comes from the `ci.yml` run of the push to the release branch, on the same commit.
 - **Versions.** The build job warns when the branch name (`release/0.3.0`) and `package.json` (`0.3.0`) disagree, because `etiquetar.yml` tags `main` with the `package.json` version. Bump `package.json` and add the `## [x.y.z]` section to `CHANGELOG.md` on the release branch.
 - **Tag and back-merge.** On the push to `main`, `etiquetar.yml` creates `vX.Y.Z` and a GitHub Release whose notes are the CHANGELOG section (skipped if the tag exists), then opens `main → develop` (title `chore: merge release x.y.z back into develop`) when `main` has commits that `develop` lacks and no such pull request is open. It deploys nothing.
-- **Environments.** `dev` accepts `develop`; `staging` and `produccion` accept `release/*`, `hotfix/*` and `main`; all three have the required reviewers jhosepmyr and elmer-riva. A release run therefore asks twice: once for staging, once, after checking it, for production. The old `preview` environment is no longer used.
-- **Pull requests stay without an environment.** A pull request preview must not wait for an approval, its deployments would mix with the history of the stages, and an environment adds no protection here: the Cloudflare secrets are repository secrets, which GitHub never gives to `pull_request` runs from forks, and `pr-preview` also checks that the head repository is this one. Anyone who can push a branch here can already deploy a preview alias, never production.
+- **Environments.** `staging` and `produccion` accept `release/*`, `hotfix/*` and `main`, and both have the required reviewers jhosepmyr and elmer-riva. A release run therefore asks twice: once for staging, once, after checking it, for production. The `dev` environment and the `ENABLE_DEV` variable were deleted; the old `preview` environment is no longer used.
+- **Pull requests deploy nothing.** `deploy.yml` has no `pull_request` trigger, so a pull request only runs `ci.yml`, which needs no Cloudflare secret. Review the change in the pull request and locally (`pnpm build && npx wrangler pages dev dist`); the first deployed copy of a change is the `staging` alias of its release branch.
 - **Re-runs and queues.** A new push to the same branch starts a new run. No deploying job is ever cancelled: each deploy job has its own concurrency group per branch and stage with `cancel-in-progress: false`, so a newer run's job waits while an older one deploys or waits for approval, and only the newest waiting job is kept. Before deploying, `pages-deploy` checks that the branch still points at the run's commit; if a newer push superseded it, the job deploys nothing (also after an approval), and `produccion` and `release-pr` are skipped for that run. Approving or rejecting a superseded run is therefore harmless.
 
 ## One-time setup (owner)

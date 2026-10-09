@@ -18,13 +18,19 @@ export const DESCARGAS_BASE_URL: string = (import.meta.env.PUBLIC_DESCARGAS_BASE
  */
 export const DESCARGAS_DISPONIBLES = true;
 
-/** The Flutter PWA, deployed by `publicar.yml` under /app/ of this same Cloudflare Pages site. */
-export const APP_WEB_PATH = "/app/";
+/**
+ * The Flutter PWA, deployed by `publicar.yml` to its own Cloudflare Pages project (`te-tengo-app`)
+ * and served at the root of its own origin. Override it at build time with `PUBLIC_APP_URL`
+ * (for example a `*.te-tengo-app.pages.dev` preview). Old `/app/*` links of this site redirect there
+ * (`public/_redirects`).
+ */
+export const APP_URL: string =
+  (import.meta.env.PUBLIC_APP_URL ?? "").trim() || "https://app.tetengo.reqsai.tech/";
 
 export const DESCARGAS = {
   android: DESCARGAS_BASE_URL ? `${DESCARGAS_BASE_URL}/te-tengo.apk` : null,
   windows: DESCARGAS_BASE_URL ? `${DESCARGAS_BASE_URL}/te-tengo-captura-setup.exe` : null,
-  iphone: APP_WEB_PATH,
+  iphone: APP_URL,
 } as const;
 
 export const SITE = {

@@ -3,7 +3,7 @@
 [![CI](https://github.com/Te-Tengo-Tech/te-tengo-landing-astro/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Te-Tengo-Tech/te-tengo-landing-astro/actions/workflows/ci.yml)
 [![Deploy](https://github.com/Te-Tengo-Tech/te-tengo-landing-astro/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/Te-Tengo-Tech/te-tengo-landing-astro/actions/workflows/deploy.yml)
 
-The public landing page of **Te Tengo**, a system that detects falls of older adults at home and alerts the family. It also hosts the downloads: the Android APK and the Windows installer (from Cloudflare R2) and the iPhone/web app (the Flutter PWA, served under `/app/` of the same site).
+The public landing page of **Te Tengo**, a system that detects falls of older adults at home and alerts the family. It also hosts the downloads: the Android APK and the Windows installer (from Cloudflare R2) and the iPhone/web app (the Flutter PWA, served from its own Cloudflare Pages project at `https://app.tetengo.reqsai.tech`).
 
 All copy is in **Spanish (Peru)** and every product claim comes from a project document (see [AGENTS.md](AGENTS.md)). There are no testimonials, logos or user counts: privacy and the published validation results take that place.
 
@@ -17,7 +17,7 @@ All copy is in **Spanish (Peru)** and every product claim comes from a project d
 | Fonts           | Atkinson Hyperlegible Next and Mono, self-hosted WOFF2 (Latin subset, OFL)                                                                          |
 | Quality         | ESLint (typescript-eslint, eslint-plugin-astro + jsx-a11y), Prettier (prettier-plugin-astro), `astro check`, Lighthouse CI (≥ 95 in every category) |
 | SEO             | Canonical URLs, Open Graph/Twitter cards with a brand OG image, `robots.txt`, `@astrojs/sitemap`, JSON-LD `SoftwareApplication`                     |
-| Hosting         | Cloudflare Pages (site + PWA) and Cloudflare R2 (binaries), deployed by GitHub Actions                                                              |
+| Hosting         | Cloudflare Pages (`te-tengo-landing` for the site, `te-tengo-app` for the PWA) and Cloudflare R2 (binaries), deployed by GitHub Actions             |
 | Package manager | pnpm                                                                                                                                                |
 
 Client JavaScript is limited to two small islands: the mobile navigation and the platform detection of the downloads section. Both are progressive enhancements; the page works without them.
@@ -36,7 +36,7 @@ Client JavaScript is limited to two small islands: the mobile navigation and the
 | FAQ                  | `#preguntas`     | Recording, who can see, no internet, hardware, bathroom, reliability, medical use                                                                                      |
 | Final call to action | —                | «Cerca de los tuyos, aunque estés lejos.» with the symbol assembling itself                                                                                            |
 
-Other routes: `/validacion/` (methodology and results), `/404`, `/app/` (the PWA, deployed by `publicar.yml`). `/descargas`, `/descargar` and `/download` redirect to `/#descargas`.
+Other routes: `/validacion/` (methodology and results), `/404`. `/descargas`, `/descargar` and `/download` redirect to `/#descargas`; `/app` and `/app/*` (where the PWA used to live) redirect with a `301` to `https://app.tetengo.reqsai.tech/`.
 
 ## Getting started
 
@@ -58,16 +58,24 @@ To test the Cloudflare `_headers` and `_redirects` locally: `npx wrangler pages 
 
 | Variable (build time)       | Purpose                                                                                                                       |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `SITE_URL`                  | Canonical origin. Default `https://te-tengo.pages.dev` until the domain is decided                                            |
+| `SITE_URL`                  | Canonical origin. Default `https://tetengo.reqsai.tech`                                                                       |
 | `PUBLIC_DESCARGAS_BASE_URL` | Public URL of the R2 bucket with `te-tengo.apk` and `te-tengo-captura-setup.exe`. Empty → those downloads show «Próximamente» |
+| `PUBLIC_APP_URL`            | URL of the Flutter PWA that the iPhone and web links open. Default `https://app.tetengo.reqsai.tech/`                         |
 
 `DESCARGAS_DISPONIBLES` in [`src/config/site.ts`](src/config/site.ts) switches every download to «Próximamente» at once.
 
 ## Deploy
 
 - **CI** ([`ci.yml`](.github/workflows/ci.yml)): install, lint, `astro check`, build and Lighthouse CI on every push to `main`/`develop` and every pull request.
-- **Deploy** ([`deploy.yml`](.github/workflows/deploy.yml)): `wrangler pages deploy` to the Pages project `te-tengo`: production on `main`, preview aliases on pull requests. Without the Cloudflare secrets it builds, explains what is missing and succeeds.
-- **Publicar** ([`publicar.yml`](.github/workflows/publicar.yml)): manual, owner only. Builds the APK (through the mobile repository's reusable workflow), the Windows installer and the PWA from the private repositories, uploads the binaries to R2 and deploys the site with the PWA under `/app/`.
+- **Deploy** ([`deploy.yml`](.github/workflows/deploy.yml)): `wrangler pages deploy` to the Pages project `te-tengo-landing` (custom domain `tetengo.reqsai.tech`): production on `main`, preview aliases on pull requests. Without the Cloudflare secrets it builds, explains what is missing and succeeds.
+- **Publicar** ([`publicar.yml`](.github/workflows/publicar.yml)): manual, owner only. Builds the APK (through the mobile repository's reusable workflow), the Windows installer and the PWA (base href `/`) from the private repositories, uploads the binaries to R2, deploys the landing to `te-tengo-landing` and the PWA to the Pages project `te-tengo-app` (custom domain `app.tetengo.reqsai.tech`, with the headers in [`deploy/app/`](deploy/app/)).
+
+| Pages project      | Custom domain             | DNS record at the registrar (Namify)             |
+| ------------------ | ------------------------- | ------------------------------------------------ |
+| `te-tengo-landing` | `tetengo.reqsai.tech`     | `CNAME` `tetengo` → `te-tengo-landing.pages.dev` |
+| `te-tengo-app`     | `app.tetengo.reqsai.tech` | `CNAME` `app.tetengo` → `te-tengo-app.pages.dev` |
+
+The older `te-tengo` Pages project (Git-connected to the thesis repository, serving the prototypes) is not touched by these workflows.
 
 One-time Cloudflare and GitHub setup: [docs/DEPLOY.md](docs/DEPLOY.md). Open questions (domain, contact e-mail, legal pages): [docs/BLOCKERS.md](docs/BLOCKERS.md).
 

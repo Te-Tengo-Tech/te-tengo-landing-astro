@@ -15,7 +15,7 @@ interface Props {
 }
 
 const { title, description, path = "/", noindex = false, jsonLd } = Astro.props;
-const site = Astro.site ?? new URL("https://te-tengo.pages.dev");
+const site = Astro.site ?? new URL("https://tetengo.reqsai.tech");
 const canonical = new URL(path, site).href;
 const ogImage = new URL("/og.png", site).href;
 ---

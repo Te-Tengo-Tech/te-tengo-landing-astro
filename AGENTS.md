@@ -33,7 +33,7 @@ The public landing page of **Te Tengo** (a system that detects falls of older ad
 
 ```
 src/
-  config/site.ts        switches and URLs (DESCARGAS_BASE_URL, DESCARGAS_DISPONIBLES, APP_WEB_PATH)
+  config/site.ts        switches and URLs (DESCARGAS_BASE_URL, DESCARGAS_DISPONIBLES, APP_URL)
   content/es.ts         every visible string, with its source; add en.ts with the same shape later
   styles/global.css     Tailwind entry, @theme tokens, @font-face, type scale, buttons, symbol animation
   layouts/Base.astro    <head> (SEO, OG, JSON-LD slot, icons), skip link, header, footer
@@ -42,6 +42,7 @@ src/
   pages/                index, validacion, 404, robots.txt
 public/                 fonts (+ OFL), icons, og.png, _headers, _redirects, site.webmanifest
 scripts/                csp.mjs (post-build CSP hashes), og-image.mjs, lhci-summary.mjs
+deploy/app/             _headers and robots.txt of the Flutter PWA's own Pages project (te-tengo-app)
 ```
 
 ## Conventions
@@ -51,7 +52,7 @@ scripts/                csp.mjs (post-build CSP hashes), og-image.mjs, lhci-summ
 - **Illustrations** are the prototype's stylised room and pose skeleton (`Room.astro`, ported from `roomSVG()` and `skeleton()`), never photos of people.
 - **Motion:** one orchestrated entrance in the hero, the symbol assembling itself (header on load, final CTA on scroll with `animation-timeline: view()`), the skeleton's slight sway. Only `transform`, `opacity` and `stroke-dashoffset`. Everything stops under `prefers-reduced-motion`. The hero headline never animates opacity (it is the LCP element).
 - **Accessibility:** WCAG AA contrast, landmarks, skip link, visible focus (`:focus-visible`), 44 px minimum targets, `role="list"` on unstyled lists, decorative SVGs `aria-hidden`, informative ones `role="img"` with a label.
-- **Security headers** live in `public/_headers`. `pnpm build` runs `scripts/csp.mjs`, which writes the hashes of the inline scripts into the CSP. `/app/*` (the Flutter PWA) detaches the landing's CSP, COOP and Permissions-Policy. Never add a splat rule under `/app/` to `_redirects`.
+- **Security headers** live in `public/_headers`. `pnpm build` runs `scripts/csp.mjs`, which writes the hashes of the inline scripts into the CSP. The Flutter PWA is a separate Pages project (`te-tengo-app`, `https://app.tetengo.reqsai.tech`) with its own headers in `deploy/app/_headers`; link to it only through `APP_URL`. The landing's `_redirects` sends the old `/app/*` paths there.
 
 ## Commands
 

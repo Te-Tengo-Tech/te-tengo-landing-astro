@@ -24,15 +24,3 @@
 
 /og.png
   Cache-Control: public, max-age=604800
-
-# The Flutter PWA (deployed by publicar.yml). Its file names are not hashed and its own service
-# worker (scope /app/) handles caching, so always revalidate. Flutter and Firebase need their own
-# policy: detach the landing's CSP, COOP and Permissions-Policy here.
-/app/*
-  Cache-Control: no-cache
-  ! Content-Security-Policy
-  ! Cross-Origin-Opener-Policy
-  ! Permissions-Policy
-
-/app/flutter_service_worker.js
-  Cache-Control: no-store

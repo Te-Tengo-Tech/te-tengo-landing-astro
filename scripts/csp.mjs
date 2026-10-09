@@ -11,7 +11,6 @@ async function htmlFiles(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (path === join(dist, "app")) continue; // the PWA has its own policy
       out.push(...(await htmlFiles(path)));
     } else if (entry.name.endsWith(".html")) out.push(path);
   }

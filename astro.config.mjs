@@ -4,7 +4,7 @@ import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 
 // Production URL. Override with SITE_URL until the custom domain is decided (docs/BLOCKERS.md).
-const site = process.env.SITE_URL || "https://te-tengo.pages.dev";
+const site = process.env.SITE_URL || "https://tetengo.reqsai.tech";
 
 export default defineConfig({
   site,
@@ -14,8 +14,7 @@ export default defineConfig({
     format: "directory",
     inlineStylesheets: "auto",
   },
-  // The Flutter PWA lives under /app/ and is deployed next to this site; keep it out of the sitemap.
-  integrations: [sitemap({ filter: (page) => !page.includes("/app/") })],
+  integrations: [sitemap()],
   vite: {
     plugins: [tailwindcss()],
   },

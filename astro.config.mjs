@@ -14,8 +14,7 @@ export default defineConfig({
     format: "directory",
     inlineStylesheets: "auto",
   },
-  // The Flutter PWA lives under /app/ and is deployed next to this site; keep it out of the sitemap.
-  integrations: [sitemap({ filter: (page) => !page.includes("/app/") })],
+  integrations: [sitemap()],
   vite: {
     plugins: [tailwindcss()],
   },

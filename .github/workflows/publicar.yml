@@ -6,10 +6,12 @@ name: Publicar
 #     build-apk.yml (te-tengo-mobile-flutter, docs/RELEASE_ANDROID.md);
 #   - Windows: installer `te-tengo-captura-setup.exe` (te-tengo-desktop-pywebview, its PyInstaller
 #     spec and Inno Setup script);
-#   - Web: the Flutter PWA (te-tengo-mobile-flutter `web/`, docs/WEB_PWA.md), built with base href /app/.
-# Publishing uploads the binaries, their .sha256 files and `te-tengo-web.tar.gz` to Cloudflare R2
-# under stable keys, then deploys this site with the PWA under /app/ to Cloudflare Pages
-# (production). With `publicar: false` (the default) everything stays as run artifacts.
+#   - Web: the Flutter PWA (te-tengo-mobile-flutter `web/`, docs/WEB_PWA.md), built with base href /
+#     for the root of its own origin.
+# Publishing uploads the binaries and their .sha256 files to Cloudflare R2 under stable keys, deploys
+# this landing to the Pages project te-tengo-landing (https://tetengo.reqsai.tech) and the PWA to the
+# Pages project te-tengo-app (https://app.tetengo.reqsai.tech), both to production. With
+# `publicar: false` (the default) everything stays as run artifacts.
 #
 # WHO RUNS IT: only the repository owner. The organization is on the GitHub Free plan with private
 # repositories, so environments with required reviewers are not available: the manual dispatch from
@@ -70,6 +72,7 @@ env:
   FLUTTER_VERSION: 3.44.8
   WRANGLER_VERSION: 4.149.0
   PAGES_PROJECT: te-tengo-landing
+  APP_PAGES_PROJECT: te-tengo-app
 
 jobs:
   preparar:
@@ -336,10 +339,13 @@ jobs:
           done
       - name: Dependencies
         run: flutter pub get --enforce-lockfile
+      # The PWA is the whole te-tengo-app site, so it lives at the root of its origin. Every URL in
+      # web/ (manifest, icons, firebase-messaging-sw.js) is relative to the base href, so the worker's
+      # scope becomes / and push keeps working.
       - name: Build the PWA
         run: |
           timeout 20m flutter build web --release \
-            --base-href /app/ \
+            --base-href / \
             --no-web-resources-cdn \
             --dart-define-from-file="$RUNNER_TEMP/defines.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -350,7 +356,7 @@ jobs:
           retention-days: 7
 
   publicar:
-    name: Publish to R2 and Cloudflare Pages
+    name: Publish to R2 and deploy the landing
     needs: [preparar, android, windows, web]
     # Only when asked, and only when every build that ran succeeded.
     if: >-
@@ -371,7 +377,6 @@ jobs:
       APK_CERT: ${{ needs.android.outputs.certificate_sha256 }}
       APK_VERSION: ${{ needs.android.outputs.version_name }} (${{ needs.android.outputs.version_code }})
       ALLOW_UNSIGNED: ${{ inputs.permitir_apk_sin_firma }}
-      WEB: ${{ needs.web.result == 'success' }}
       VERSION_AGENTE: ${{ needs.windows.outputs.version_agente }}
     steps:
       - name: Refuse a debug-signed APK
@@ -393,17 +398,6 @@ jobs:
         with:
           name: windows
           path: salida
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: env.WEB == 'true'
-        with:
-          name: web
-          path: web
-
-      - name: Package the PWA
-        if: env.WEB == 'true'
-        run: |
-          tar -czf salida/te-tengo-web.tar.gz -C web .
-          (cd salida && sha256sum te-tengo-web.tar.gz > te-tengo-web.tar.gz.sha256)
 
       - name: Explain what is missing
         if: env.HAS_CLOUDFLARE != 'true' || env.R2_BUCKET == ''
@@ -426,8 +420,6 @@ jobs:
           put te-tengo.apk.sha256 "text/plain; charset=utf-8" ""
           put te-tengo-captura-setup.exe application/vnd.microsoft.portable-executable 'attachment; filename="te-tengo-captura-setup.exe"'
           put te-tengo-captura-setup.exe.sha256 "text/plain; charset=utf-8" ""
-          put te-tengo-web.tar.gz application/gzip ""
-          put te-tengo-web.tar.gz.sha256 "text/plain; charset=utf-8" ""
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         if: env.HAS_CLOUDFLARE == 'true'
@@ -437,30 +429,25 @@ jobs:
         if: env.HAS_CLOUDFLARE == 'true'
         with:
           node-version-file: sitio/.nvmrc
-      - name: Build the site with the PWA under /app/
+      # The landing only: the PWA is deployed to its own project by the `app` job below.
+      - name: Build the landing
         if: env.HAS_CLOUDFLARE == 'true'
         working-directory: sitio
         env:
           SITE_URL: ${{ vars.SITE_URL }}
           PUBLIC_DESCARGAS_BASE_URL: ${{ vars.DESCARGAS_BASE_URL }}
+          PUBLIC_APP_URL: ${{ vars.APP_URL }}
         run: |
           set -euo pipefail
           pnpm install --frozen-lockfile
           pnpm build
-          if [ "$WEB" = true ]; then
-            mkdir -p dist/app
-            cp -R ../web/. dist/app/
-          elif [ -n "$DESCARGAS_BASE_URL" ] && curl -fsSL -o "$RUNNER_TEMP/web.tar.gz" "${DESCARGAS_BASE_URL%/}/te-tengo-web.tar.gz"; then
-            mkdir -p dist/app
-            tar -xzf "$RUNNER_TEMP/web.tar.gz" -C dist/app
-          fi
       - name: Create the Pages project if it does not exist
         if: env.HAS_CLOUDFLARE == 'true'
         run: |
           if ! npx --yes "wrangler@$WRANGLER_VERSION" pages project list 2> /dev/null | grep -q " $PAGES_PROJECT "; then
             npx --yes "wrangler@$WRANGLER_VERSION" pages project create "$PAGES_PROJECT" --production-branch main --force
           fi
-      - name: Deploy to Cloudflare Pages (production)
+      - name: Deploy the landing to Cloudflare Pages (production)
         id: pages
         if: env.HAS_CLOUDFLARE == 'true'
         env:
@@ -490,7 +477,89 @@ jobs:
             echo "- APK: $APK_VERSION, signed with the release key: $APK_SIGNED"
             echo "- APK signing certificate SHA-256: \`$APK_CERT\`"
             echo "- Te Tengo Captura: $VERSION_AGENTE"
-            echo "- PWA built in this run: $WEB"
             echo "- Downloads: ${DESCARGAS_BASE_URL:-not configured}"
-            echo "- Site: ${URL:-not deployed}"
+            echo "- Landing ($PAGES_PROJECT): ${URL:-not deployed}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  app:
+    name: Deploy the PWA to Cloudflare Pages
+    needs: [preparar, web, publicar]
+    # After the publish job (which refuses a debug-signed APK), and only when the PWA was built in
+    # this run. A run without a PWA leaves the current te-tengo-app deployment untouched.
+    if: >-
+      !cancelled() && inputs.publicar && needs.publicar.result == 'success'
+      && needs.web.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SHA_MOBILE: ${{ needs.preparar.outputs.sha_mobile }}
+    steps:
+      - name: Explain what is missing
+        if: env.HAS_CLOUDFLARE != 'true'
+        run: |
+          echo "::notice title=PWA not deployed::Set the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets (docs/DEPLOY.md). The PWA is kept as the web run artifact."
+
+      # Only the PWA's Pages files (_headers, robots.txt) from this repository.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.HAS_CLOUDFLARE == 'true'
+        with:
+          persist-credentials: false
+          path: sitio
+          sparse-checkout: deploy/app
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: env.HAS_CLOUDFLARE == 'true'
+        with:
+          name: web
+          path: web
+      - name: Add the Pages files of the PWA
+        if: env.HAS_CLOUDFLARE == 'true'
+        run: |
+          set -euo pipefail
+          test -f web/index.html
+          test -f web/firebase-messaging-sw.js
+          test -f web/manifest.json
+          cp sitio/deploy/app/_headers sitio/deploy/app/robots.txt web/
+          echo "PWA: $(find web -type f | wc -l) files."
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: env.HAS_CLOUDFLARE == 'true'
+        with:
+          node-version-file: sitio/.nvmrc
+      - name: Create the Pages project if it does not exist
+        if: env.HAS_CLOUDFLARE == 'true'
+        run: |
+          if ! npx --yes "wrangler@$WRANGLER_VERSION" pages project list 2> /dev/null | grep -q " $APP_PAGES_PROJECT "; then
+            npx --yes "wrangler@$WRANGLER_VERSION" pages project create "$APP_PAGES_PROJECT" --production-branch main --force
+          fi
+      - name: Deploy the PWA to Cloudflare Pages (production)
+        id: pages
+        if: env.HAS_CLOUDFLARE == 'true'
+        env:
+          BRANCH: main
+        # Same pattern as the landing: Wrangler through npx. The commit hash is the mobile commit the
+        # PWA was built from.
+        run: |
+          set -o pipefail
+          npx --yes "wrangler@$WRANGLER_VERSION" pages deploy web --project-name="$APP_PAGES_PROJECT" \
+            --branch="$BRANCH" --commit-hash="$SHA_MOBILE" --commit-message="$REPO_MOBILE ${SHA_MOBILE:0:12}" \
+            | tee "$RUNNER_TEMP/pages-deploy-app.log"
+          url=$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' "$RUNNER_TEMP/pages-deploy-app.log" | head -n1)
+          alias=$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' "$RUNNER_TEMP/pages-deploy-app.log" | tail -n1)
+          echo "deployment-url=${url}" >> "$GITHUB_OUTPUT"
+          echo "pages-deployment-alias-url=${alias}" >> "$GITHUB_OUTPUT"
+          if [ "$BRANCH" = main ]; then echo "pages-environment=production" >> "$GITHUB_OUTPUT"; else echo "pages-environment=preview" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Summary
+        if: always()
+        env:
+          URL: ${{ steps.pages.outputs.deployment-url }}
+        run: |
+          {
+            echo "## Te Tengo web app"
+            echo "- Built from $REPO_MOBILE@\`${SHA_MOBILE:0:12}\`"
+            echo "- PWA ($APP_PAGES_PROJECT): ${URL:-not deployed}"
           } >> "$GITHUB_STEP_SUMMARY"

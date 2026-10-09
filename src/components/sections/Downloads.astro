@@ -1,5 +1,5 @@
 ---
-import { DESCARGAS, DESCARGAS_DISPONIBLES, APP_WEB_PATH } from "../../config/site";
+import { DESCARGAS, DESCARGAS_DISPONIBLES, APP_URL } from "../../config/site";
 import { es } from "../../content/es";
 import Icon from "../Icon.astro";
 import type { IconName } from "../icons";
@@ -82,7 +82,7 @@ const options: { key: Key; icon: IconName; href: string | null; download: boolea
 
     <p class="mt-8 text-ink-2">
       {d.web}
-      <a class="link ml-1" href={APP_WEB_PATH}>
+      <a class="link ml-1" href={APP_URL}>
         {d.webLink}
       </a>
     </p>

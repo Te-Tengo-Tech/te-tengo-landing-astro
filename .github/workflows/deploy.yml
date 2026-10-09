@@ -1,11 +1,12 @@
 name: Deploy
 
-# Builds the site and deploys it to Cloudflare Pages (project `te-tengo`, docs/DEPLOY.md):
+# Builds the landing and deploys it to Cloudflare Pages (project `te-tengo-landing`,
+# https://tetengo.reqsai.tech, docs/DEPLOY.md):
 #   - push to main      → production deployment;
 #   - pull requests     → preview deployment on the PR branch alias.
-# The Flutter PWA at /app/ is not built here: publicar.yml publishes it to R2 as
-# `te-tengo-web.tar.gz`, and every deployment unpacks the latest copy into dist/app/, because a
-# Pages deployment replaces the whole site.
+# The Flutter PWA is not part of this site: publicar.yml deploys it to its own Pages project
+# (`te-tengo-app`, https://app.tetengo.reqsai.tech), and old /app/* links redirect there
+# (public/_redirects).
 # Without the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets the job only builds, prints a
 # notice with the setup steps and succeeds.
 on:
@@ -33,7 +34,6 @@ jobs:
     timeout-minutes: 15
     env:
       HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
-      DESCARGAS_BASE_URL: ${{ vars.DESCARGAS_BASE_URL }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,22 +49,8 @@ jobs:
         env:
           SITE_URL: ${{ vars.SITE_URL }}
           PUBLIC_DESCARGAS_BASE_URL: ${{ vars.DESCARGAS_BASE_URL }}
+          PUBLIC_APP_URL: ${{ vars.APP_URL }}
         run: pnpm build
-
-      - name: Add the published PWA under /app/
-        run: |
-          set -euo pipefail
-          if [ -z "$DESCARGAS_BASE_URL" ]; then
-            echo "::notice title=No PWA in this deployment::The DESCARGAS_BASE_URL variable is not set, so /app/ is not included. See docs/DEPLOY.md."
-            exit 0
-          fi
-          if curl -fsSL --retry 3 -o "$RUNNER_TEMP/web.tar.gz" "${DESCARGAS_BASE_URL%/}/te-tengo-web.tar.gz"; then
-            mkdir -p dist/app
-            tar -xzf "$RUNNER_TEMP/web.tar.gz" -C dist/app
-            echo "PWA added: $(find dist/app -type f | wc -l) files."
-          else
-            echo "::notice title=No PWA in this deployment::te-tengo-web.tar.gz is not in R2 yet. Run the Publicar workflow once to publish it."
-          fi
 
       - name: Explain the missing Cloudflare secrets
         if: env.HAS_CLOUDFLARE != 'true'

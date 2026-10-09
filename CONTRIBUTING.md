@@ -16,16 +16,16 @@
 1. Create a branch from `develop` with one of the prefixes above.
 2. `pnpm install`, then work with `pnpm dev`.
 3. Before pushing: `pnpm lint`, `pnpm check`, `pnpm build` and, for visual changes, `pnpm lhci`.
-4. Open a pull request to `develop` with the template. Every pull request gets a Cloudflare Pages preview (while `ENABLE_DEV` is `true` and the secrets exist, [docs/DEPLOY.md](docs/DEPLOY.md)).
+4. Open a pull request to `develop` with the template. Pull requests only run CI: there are no Pages previews, and nothing deploys until a `release/*` or `hotfix/*` branch is pushed ([docs/DEPLOY.md](docs/DEPLOY.md)).
 5. **CI must be green before merging.** The rulesets `proteger-develop` and `proteger-main` require a pull request with one approval and the `Lint, types and build` check, and block force-pushes and deletions.
 
 ## Continuous integration
 
-| Workflow                                     | Trigger                                                      | What it does                                                                                                                                                                                                                                                      |
-| -------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [CI](.github/workflows/ci.yml)               | Push to `main`, `develop`, `release/*`, `hotfix/*`; every PR | Lint (ESLint + Prettier), `astro check`, build, Lighthouse CI (fails under 95 in any category) with the scores in the run summary                                                                                                                                 |
-| [Deploy](.github/workflows/deploy.yml)       | Push to `develop`, `release/*`, `hotfix/*`; PRs (previews)   | Build once; `develop` → `develop` alias (approval on `dev`); `release/*`/`hotfix/*` → `staging` alias (approval on `staging`) → production (approval on `produccion`), each with a smoke check, then opens the PR to `main`; PRs → preview alias without approval |
-| [Etiquetar](.github/workflows/etiquetar.yml) | Push to `main`                                               | Tag `vX.Y.Z` (from `package.json`) with a GitHub Release (CHANGELOG section), then the back-merge PR `main → develop`; deploys nothing                                                                                                                            |
+| Workflow                                     | Trigger                                                      | What it does                                                                                                                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [CI](.github/workflows/ci.yml)               | Push to `main`, `develop`, `release/*`, `hotfix/*`; every PR | Lint (ESLint + Prettier), `astro check`, build, Lighthouse CI (fails under 95 in any category) with the scores in the run summary                                               |
+| [Deploy](.github/workflows/deploy.yml)       | Push to `release/*`, `hotfix/*`                              | Build once; `staging` alias (approval on `staging`) → production (approval on `produccion`), each with a smoke check, then opens the PR to `main`. No dev stage, no PR previews |
+| [Etiquetar](.github/workflows/etiquetar.yml) | Push to `main`                                               | Tag `vX.Y.Z` (from `package.json`) with a GitHub Release (CHANGELOG section), then the back-merge PR `main → develop`; deploys nothing                                          |
 
 Dependabot opens weekly update PRs to `develop` for npm and GitHub Actions.
 

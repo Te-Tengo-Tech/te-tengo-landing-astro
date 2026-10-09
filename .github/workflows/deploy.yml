@@ -11,11 +11,12 @@ name: Deploy
 #   push to main                 nothing here (etiquetar.yml tags the release and opens the back-merge)
 #
 # There is no dev stage and no pull request preview: only staging and produccion deploy, both from
-# the release branch (pull requests get CI only, ci.yml). Every deploy job runs .github/actions/pages-deploy, which
-# downloads the `landing-dist` artifact of the build job and checks its fingerprint; none of them
-# builds, so production serves exactly the bytes that passed staging. The approvals are not in this
-# file: they are the required reviewers of the `staging` and `produccion` environments
-# (Settings → Environments), whose branch policies accept release/*, hotfix/* and main.
+# the release branch. Pushes to develop and pull requests only run CI (ci.yml). Every deploy job runs
+# .github/actions/pages-deploy, which downloads the `landing-dist` artifact of the build job and
+# checks its fingerprint; none of them builds, so production serves exactly the bytes that passed
+# staging. The approvals are not in this file: they are the required reviewers of the `staging` and
+# `produccion` environments (Settings → Environments), whose branch policies accept release/*,
+# hotfix/* and main.
 #
 # Switches (organization Actions variables; a repository variable with the same name wins). Only the
 # value `true` turns a stage on; unset means off, the job shows as skipped and the run summary says why:

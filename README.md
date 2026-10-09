@@ -1,7 +1,7 @@
 # te-tengo-landing-astro
 
 [![CI](https://github.com/Te-Tengo-Tech/te-tengo-landing-astro/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Te-Tengo-Tech/te-tengo-landing-astro/actions/workflows/ci.yml)
-[![Deploy](https://github.com/Te-Tengo-Tech/te-tengo-landing-astro/actions/workflows/deploy.yml/badge.svg?branch=develop)](https://github.com/Te-Tengo-Tech/te-tengo-landing-astro/actions/workflows/deploy.yml)
+[![Deploy](https://github.com/Te-Tengo-Tech/te-tengo-landing-astro/actions/workflows/deploy.yml/badge.svg)](https://github.com/Te-Tengo-Tech/te-tengo-landing-astro/actions/workflows/deploy.yml)
 
 The public landing page of **Te Tengo**, a system that detects falls of older adults at home and alerts the family. It also hosts the downloads: the Android APK, the Windows installer and the Mac beta (from Cloudflare R2) and the iPhone/web app (the Flutter PWA, served from its own Cloudflare Pages project at `https://app.tetengo.reqsai.tech`).
 
@@ -69,7 +69,7 @@ To test the Cloudflare `_headers` and `_redirects` locally: `npx wrangler pages 
 Gitflow with "build once, deploy many": environments are promoted from the **release branch**, and `main` and the tag come last, after production.
 
 - **CI** ([`ci.yml`](.github/workflows/ci.yml)): install, lint, `astro check`, build and Lighthouse CI on every pull request and every push to `main`, `develop`, `release/*` and `hotfix/*`.
-- **Deploy** ([`deploy.yml`](.github/workflows/deploy.yml)): builds once and promotes that same artifact with `wrangler pages deploy` through the Pages project `te-tengo-landing` (custom domain `tetengo.reqsai.tech`). A push to `develop` deploys the `develop` alias (environment `dev`). A push to `release/*` or `hotfix/*` deploys the `staging` alias (environment `staging`, smoke check), then the same artifact to production (environment `produccion`, smoke check of `https://tetengo.reqsai.tech`), then opens the pull request `release/x.y.z → main`. Pull requests get a preview alias without an environment. Nothing deploys on a push to `main`. Without the Cloudflare secrets it builds, explains what is missing and succeeds.
+- **Deploy** ([`deploy.yml`](.github/workflows/deploy.yml)): builds once and promotes that same artifact with `wrangler pages deploy` through the Pages project `te-tengo-landing` (custom domain `tetengo.reqsai.tech`). Only two stages deploy, both from a push to `release/*` or `hotfix/*`: the build goes to or the `staging` alias (environment `staging`, smoke check), then the same artifact to production (environment `produccion`, smoke check of `https://tetengo.reqsai.tech`), then opens the pull request `release/x.y.z → main`. There is no dev stage and no pull request preview: pushes to `develop` and pull requests only run CI, and nothing deploys on a push to `main`. Without the Cloudflare secrets it builds, explains what is missing and succeeds.
 - **Etiquetar** ([`etiquetar.yml`](.github/workflows/etiquetar.yml)): on a push to `main` (the merged release pull request) it creates the tag `vX.Y.Z` from `package.json` with a GitHub Release (the CHANGELOG section as notes) and opens the back-merge pull request `main → develop`.
 
 The apps publish themselves: the APK, the Windows installer and the Mac `.dmg` go to the R2 bucket, and the PWA to the Pages project `te-tengo-app` (`app.tetengo.reqsai.tech`), from the release pipelines of `te-tengo-mobile-flutter` and `te-tengo-desktop-pywebview`. This repository only links to them.
@@ -84,17 +84,15 @@ The older `te-tengo` Pages project (Git-connected to the thesis repository, serv
 ### Release flow
 
 ```text
-push to develop          ─ Build ─▶ dev [approval] ─▶ https://develop.te-tengo-landing.pages.dev
 push to release/x.y.z    ─ Build ─▶ staging [approval] ─▶ https://staging.te-tengo-landing.pages.dev (smoke check)
   (or hotfix/x.y.z)              └─▶ produccion [approval] ─▶ https://tetengo.reqsai.tech (smoke check)
                                        └─▶ pull request release/x.y.z → main (merged by a person)
 push to main             ─ etiquetar.yml ─▶ tag vX.Y.Z + GitHub Release ─▶ pull request main → develop
-pull request             ─ Build ─▶ branch alias, no environment, no approval
+push to develop, PR      ─ ci.yml only (nothing deploys)
 ```
 
 | Environment  | Required reviewers    | Branches                        | Used by                                    |
 | ------------ | --------------------- | ------------------------------- | ------------------------------------------ |
-| `dev`        | jhosepmyr, elmer-riva | `develop`                       | `deploy.yml` → `dev` (alias `develop`)     |
 | `staging`    | jhosepmyr, elmer-riva | `release/*`, `hotfix/*`, `main` | `deploy.yml` → `staging` (alias `staging`) |
 | `produccion` | jhosepmyr, elmer-riva | `release/*`, `hotfix/*`, `main` | `deploy.yml` → `produccion`                |
 
@@ -102,7 +100,6 @@ Each stage also has an on/off switch, an organization Actions variable that must
 
 | Variable                    | Stage                                                             |
 | --------------------------- | ----------------------------------------------------------------- |
-| `ENABLE_DEV`                | `dev` (alias `develop`) and the pull request previews             |
 | `ENABLE_STAGING`            | `staging` (alias `staging`); off: production only needs the build |
 | `ENABLE_LANDING_PRODUCCION` | `produccion` (`https://tetengo.reqsai.tech`)                      |
 

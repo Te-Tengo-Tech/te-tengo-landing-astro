@@ -20,10 +20,11 @@ The repository is private, so GitHub's private vulnerability reporting is not av
 
 - **Strict headers** (`public/_headers`): CSP without `unsafe-inline` scripts (hashes are generated at build time), `frame-ancestors 'none'`, HSTS, `nosniff`, a restrictive Permissions-Policy and COOP. The Flutter PWA is served from its own origin (`https://app.tetengo.reqsai.tech`) with its own policy (`deploy/app/_headers`).
 - **No third-party requests**: fonts, icons and images are self-hosted; there are no analytics or cookies.
-- **Workflows**: actions pinned to commit SHAs, `persist-credentials: false`, minimal `permissions` per job, inputs passed through `env`. `publicar.yml` only runs by manual dispatch from `main`; it never runs on pull requests, so no fork code can reach its secrets.
+- **Workflows**: actions pinned to commit SHAs, `persist-credentials: false`, minimal `permissions` per job, inputs passed through `env`. `publicar.yml` only runs on `repository_dispatch` (sent with a token from the app repositories) or by manual dispatch, both on `main`; it never runs on pull requests, so no fork code can reach its secrets. The dispatch payload (`ref`, `version`) is validated and passed through `env`.
+- **Approval before production**: every job that deploys to Cloudflare Pages production or uploads to R2 runs in the `produccion` environment, which waits for one of its required reviewers and only accepts `main`. Builds run before, without the environment.
 - **Secrets never in git**: the Firebase web values are public but are stored as repository variables, not committed; the keystore, tokens and Cloudflare credentials are repository secrets.
 - **Published binaries** go to R2 with a `.sha256` file next to each one; the publish job refuses a debug-signed APK unless explicitly allowed.
 
 ## Limitations of the current plan
 
-The organization uses the GitHub **Free** plan with private repositories: no CodeQL, no secret scanning or push protection, no branch protection and no environments with required reviewers. Code review and the rules above are the guards; the manual dispatch of `publicar.yml` by the owner is its approval.
+The organization uses the GitHub **Free** plan. The repositories are public, so the rulesets on `main` and `develop` (pull request with one approval and the CI check, no force-push or deletion) and the `produccion` environment with required reviewers are enforced; code review, those approvals and the rules above are the guards.

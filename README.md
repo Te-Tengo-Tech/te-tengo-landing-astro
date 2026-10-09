@@ -67,8 +67,8 @@ To test the Cloudflare `_headers` and `_redirects` locally: `npx wrangler pages 
 ## Deploy
 
 - **CI** ([`ci.yml`](.github/workflows/ci.yml)): install, lint, `astro check`, build and Lighthouse CI on every push to `main`/`develop` and every pull request.
-- **Deploy** ([`deploy.yml`](.github/workflows/deploy.yml)): `wrangler pages deploy` to the Pages project `te-tengo-landing` (custom domain `tetengo.reqsai.tech`): production on `main`, preview aliases on pull requests. Without the Cloudflare secrets it builds, explains what is missing and succeeds.
-- **Publicar** ([`publicar.yml`](.github/workflows/publicar.yml)): manual, owner only. Builds the APK (through the mobile repository's reusable workflow), the Windows installer and the PWA (base href `/`) from the private repositories, uploads the binaries to R2, deploys the landing to `te-tengo-landing` and the PWA to the Pages project `te-tengo-app` (custom domain `app.tetengo.reqsai.tech`, with the headers in [`deploy/app/`](deploy/app/)).
+- **Deploy** ([`deploy.yml`](.github/workflows/deploy.yml)): builds once, then `wrangler pages deploy` to the Pages project `te-tengo-landing` (custom domain `tetengo.reqsai.tech`): preview aliases on pull requests without approval, and production on every push to `main` after an approval on the `produccion` environment. Without the Cloudflare secrets it builds, explains what is missing and succeeds.
+- **Publicar** ([`publicar.yml`](.github/workflows/publicar.yml)): started by the app repositories when a release reaches their `main` (`repository_dispatch` `publicar-movil` or `publicar-escritorio`), or by hand from `main`. Builds the APK (through the mobile repository's reusable workflow) and the PWA (base href `/`), or the Windows installer, at the released commit; after an approval on `produccion` it uploads the binaries to R2 and deploys the PWA to the Pages project `te-tengo-app` (custom domain `app.tetengo.reqsai.tech`, with the headers in [`deploy/app/`](deploy/app/)).
 
 | Pages project      | Custom domain             | DNS record at the registrar (Namify)             |
 | ------------------ | ------------------------- | ------------------------------------------------ |
@@ -76,6 +76,18 @@ To test the Cloudflare `_headers` and `_redirects` locally: `npx wrangler pages 
 | `te-tengo-app`     | `app.tetengo.reqsai.tech` | `CNAME` `app.tetengo` → `te-tengo-app.pages.dev` |
 
 The older `te-tengo` Pages project (Git-connected to the thesis repository, serving the prototypes) is not touched by these workflows.
+
+### Release → approval
+
+Nobody configures or runs anything by hand to publish: merging a release into `main` is enough, and the run then waits for one of the required reviewers of the `produccion` environment (jhosepmyr, elmer-riva) to approve it on its page (_Review deployments_), like a pull request.
+
+| Released to `main` in…       | Builds (no approval)                                       | Waits for approval, then publishes                        |
+| ---------------------------- | ---------------------------------------------------------- | --------------------------------------------------------- |
+| this repository              | `deploy.yml` → `Build`                                     | the landing → `https://tetengo.reqsai.tech`               |
+| `te-tengo-mobile-flutter`    | `publicar.yml` (`publicar-movil`) → APK and PWA            | `te-tengo.apk` in R2, the PWA → `app.tetengo.reqsai.tech` |
+| `te-tengo-desktop-pywebview` | `publicar.yml` (`publicar-escritorio`) → Windows installer | `te-tengo-captura-setup.exe` in R2                        |
+
+The app repositories send the dispatch with their `DISPATCH_TOKEN` secret once their CI passes on `main`. Details, tokens and the manual fallback: [docs/DEPLOY.md](docs/DEPLOY.md#release--approval-flow).
 
 One-time Cloudflare and GitHub setup: [docs/DEPLOY.md](docs/DEPLOY.md). Open questions (domain, contact e-mail, legal pages): [docs/BLOCKERS.md](docs/BLOCKERS.md).
 

@@ -2,10 +2,10 @@
 
 The landing and the Flutter PWA are **two Cloudflare Pages projects**, each on its own custom domain:
 
-| Pages project      | Custom domain                     | Content                                 | Deployed by                                                   |
-| ------------------ | --------------------------------- | --------------------------------------- | ------------------------------------------------------------- |
-| `te-tengo-landing` | `https://tetengo.reqsai.tech`     | This Astro site                         | `deploy.yml` (push to `main`, PR previews) and `publicar.yml` |
-| `te-tengo-app`     | `https://app.tetengo.reqsai.tech` | The Flutter PWA, at the root path (`/`) | `publicar.yml` only (built from `te-tengo-mobile-flutter`)    |
+| Pages project      | Custom domain                     | Content                                 | Deployed by                                                               |
+| ------------------ | --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| `te-tengo-landing` | `https://tetengo.reqsai.tech`     | This Astro site                         | `deploy.yml` (push to `main`, PR previews) and manual `publicar.yml` runs |
+| `te-tengo-app`     | `https://app.tetengo.reqsai.tech` | The Flutter PWA, at the root path (`/`) | `publicar.yml` only (built from `te-tengo-mobile-flutter`)                |
 
 The older `te-tengo` project is Git-connected to the thesis repository and serves the prototypes; these workflows never touch it.
 
@@ -22,15 +22,32 @@ Since the PWA has its own project, a landing deployment no longer has to ship it
 
 ## Workflows
 
-| Workflow       | Trigger                                        | Needs                                                                                                  |
-| -------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `ci.yml`       | push to `main`/`develop`, PRs                  | nothing                                                                                                |
-| `deploy.yml`   | push to `main` (production) and PRs (previews) | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variables `DESCARGAS_BASE_URL`, `SITE_URL` (optional) |
-| `publicar.yml` | **manual, from `main`, owner only**            | everything below; deploys `te-tengo-landing` and `te-tengo-app`                                        |
+| Workflow       | Trigger                                                                                                      | Approval on `produccion`                    | Needs                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ci.yml`       | push to `main`/`develop`, PRs                                                                                | no                                          | nothing                                                                                                |
+| `deploy.yml`   | push to `main` (production) and PRs (previews)                                                               | production job only; previews deploy freely | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variables `DESCARGAS_BASE_URL`, `SITE_URL` (optional) |
+| `publicar.yml` | `repository_dispatch` `publicar-movil` / `publicar-escritorio` from the app repositories; manual from `main` | every R2 upload and Pages deployment        | everything below; uploads to R2, deploys `te-tengo-app` (and `te-tengo-landing` on manual full runs)   |
 
 Every step whose secret or variable is missing prints a `::notice` with what to set and is skipped, so the workflows stay green before the setup is done.
 
-**Who runs `publicar.yml`.** Only the repository owner. The organization is on GitHub Free with private repositories, where environments with required reviewers are not available: the manual dispatch from `main` is the approval. It never runs on push or pull requests.
+## Release → approval flow
+
+Publishing needs no manual run: a release that reaches `main` builds on its own, and a person only approves it, the same way a pull request is approved.
+
+The **`produccion` environment** (_Settings → Environments_, configured by the owner, not by these workflows) has two required reviewers, **jhosepmyr** and **elmer-riva** (either one approves), and a deployment branch policy that only accepts `main`. A job that names it stops before its first step with _Waiting for review_, and GitHub notifies the reviewers. On the run page, _Review deployments_ → tick `produccion` → _Approve and deploy_ (or _Reject_). An unanswered request expires after 30 days.
+
+| What reaches `main`                                   | What starts                                                                                                                                                                                                                                                             | What waits for approval                                                                               |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| A landing release (`release/*` or `hotfix/*` → main)  | `deploy.yml`: the `Build` job, then `Cloudflare Pages (production)`                                                                                                                                                                                                     | `Cloudflare Pages (production)` → `https://tetengo.reqsai.tech`                                       |
+| A mobile release (te-tengo-mobile-flutter → main)     | There, `CI` passes on `main` and `notificar-landing.yml` sends `repository_dispatch` `publicar-movil` with `{ref: <commit SHA>, version: <pubspec version>}`. Here, `publicar.yml` builds the APK (`build-apk.yml` at that SHA) and the PWA, then `revisar` checks them | `Upload the binaries to R2` (`te-tengo.apk`) and `Deploy the PWA` → `https://app.tetengo.reqsai.tech` |
+| A desktop release (te-tengo-desktop-pywebview → main) | There, `CI` passes on `main` and `notificar-landing.yml` sends `publicar-escritorio` with `{ref, version: <pyproject version>}`. Here, `publicar.yml` builds and tests the Windows installer at that SHA, then `revisar` runs                                           | `Upload the binaries to R2` (`te-tengo-captura-setup.exe`)                                            |
+
+- **Builds first, approval after.** The build jobs and `revisar` run without an environment. `revisar` refuses a debug-signed APK and writes on the run summary what the approval will publish (versions, source commits, the APK signing certificate, destinations). Only then do the publishing jobs ask for approval; they all wait at the same time, so one approval covers the run. A failed build publishes nothing and asks nothing.
+- **Only what was released.** A `publicar-movil` dispatch builds and publishes the APK and the PWA; a `publicar-escritorio` dispatch, the Windows installer. Neither redeploys the landing, which does not depend on the binaries.
+- **Queues.** Each kind of publication (`publicar-movil`, `publicar-escritorio`, manual) has its own concurrency group: a run waiting for approval holds its group, a newer one of the same kind queues behind it, and a third replaces the queued one. In `deploy.yml` a newer push to `main` cancels a production run still waiting for approval.
+- **Missing configuration.** Without the Cloudflare secrets (or `DESCARGAS_R2_BUCKET` for R2), the publishing jobs are skipped and nothing asks for approval. Without `DISPATCH_TOKEN` in an app repository, its `notificar-landing.yml` prints a notice and nothing is dispatched.
+- **The app repositories approve their own channels.** Each has its own `produccion` environment with the same reviewers: the mobile repository for the Google Play upload (`release-android.yml`), the desktop repository for the draft GitHub Release (`release-windows.yml`). Those approvals are separate from this one.
+- **The workflow file on `main` counts.** `repository_dispatch` and the environment both use `main`: changes to `publicar.yml` apply to dispatches only after a landing release reaches `main`.
 
 ## One-time setup (owner)
 
@@ -110,18 +127,31 @@ gh variable set DESCARGAS_BASE_URL --body https://pub-xxxxxxxx.r2.dev
 gh variable set TT_API_URL --body https://<api host>
 ```
 
-**One token name.** This repository uses `TT_REPOS_TOKEN` for every private checkout. The mobile repository's reusable workflow calls the same token `MOBILE_REPO_TOKEN`; `publicar.yml` passes `TT_REPOS_TOKEN` under that name.
+**One token name.** This repository uses `TT_REPOS_TOKEN` for every checkout of the app repositories. The mobile repository's reusable workflow calls the same token `MOBILE_REPO_TOKEN`; `publicar.yml` passes `TT_REPOS_TOKEN` under that name.
 
-### 6. Allow the mobile repository's reusable workflow
+**`DISPATCH_TOKEN` lives in the app repositories, not here.** te-tengo-mobile-flutter and te-tengo-desktop-pywebview each keep a secret `DISPATCH_TOKEN`: a fine-grained personal access token with resource owner **Te-Tengo-Tech**, _Only select repositories_ → **te-tengo-landing-astro**, repository permission **Contents: Read and write** (what `POST /repos/{owner}/{repo}/dispatches` requires; _Metadata: Read-only_ is added automatically). One token can be stored in both repositories:
 
-`publicar.yml` builds the APK with `Te-Tengo-Tech/te-tengo-mobile-flutter/.github/workflows/build-apk.yml@develop` (mobile PR #8, branch `feature/mobile-signed-apk`; it must be merged into `develop` first). In **te-tengo-mobile-flutter**: _Settings → Actions → General → Access_ → «Accessible from repositories in the 'Te-Tengo-Tech' organization». The owner changes this setting.
+```bash
+gh secret set DISPATCH_TOKEN --repo Te-Tengo-Tech/te-tengo-mobile-flutter
+gh secret set DISPATCH_TOKEN --repo Te-Tengo-Tech/te-tengo-desktop-pywebview
+```
+
+If the organization requires approval of fine-grained tokens, an owner approves it under _Organization settings → Personal access tokens → Pending requests_. Renew it before it expires; an expired token makes the dispatch step fail with `401`.
+
+### 6. The mobile repository's reusable workflow
+
+`publicar.yml` builds the APK with `Te-Tengo-Tech/te-tengo-mobile-flutter/.github/workflows/build-apk.yml@develop`, checking out the mobile commit being published. The mobile repository is public, so any repository can call its reusable workflows and no _Actions → General → Access_ setting is needed.
 
 ## Publishing a version
 
-1. Bump the version in the mobile repository (`pubspec.yaml`, `+N` must grow) or pass `build_number`.
-2. _Actions → Publicar → Run workflow_, **branch `main`**: refs of the mobile and desktop repositories, `publicar: true`.
-3. The run builds the APK (signed), the Windows installer (smoke-tested, install/uninstall-tested) and the PWA (`flutter build web --base-href /`). The `publicar` job uploads the binaries to R2 and deploys the landing to `te-tengo-landing`; then the `app` job adds `deploy/app/_headers` and `deploy/app/robots.txt` to the PWA build and deploys it to `te-tengo-app` (production, branch `main`). A run whose mobile ref has no `web/` folder leaves the current PWA deployment as it is. The summary shows the APK signing certificate fingerprint: it must be the same in every release.
-4. With `publicar: false` everything stays as run artifacts for 7 days, for checking.
+**The normal path is a release.** Bump the version in the app repository (`pubspec.yaml`, whose `+N` must grow, or `pyproject.toml` and `__version__`), merge the `release/<version>` branch into `main` there, and approve the `Publicar` run that appears in this repository (see [Release → approval flow](#release--approval-flow)). The approval request names the run `Publicar publicar-movil <version>` or `Publicar publicar-escritorio <version>`.
+
+**By hand** (a rebuild, a first publication, or both apps at once): _Actions → Publicar → Run workflow_, **branch `main`**:
+
+1. `partes`: `todo`, `movil` (APK + PWA) or `escritorio` (Windows installer); the refs of the mobile and desktop repositories (default `main`); optionally `build_number`.
+2. `publicar: true` to publish after approval; with `false` (the default) everything stays as run artifacts for 7 days, for checking, and nothing asks for approval.
+3. The run builds the APK (signed), the PWA (`flutter build web --base-href /`) and the Windows installer (smoke-tested, install/uninstall-tested), as `partes` asks. `revisar` refuses a debug-signed APK and summarises what will be published, including the APK signing certificate fingerprint, which must be the same in every release.
+4. After approval, `Upload the binaries to R2` uploads them, `Deploy the PWA` adds `deploy/app/_headers` and `deploy/app/robots.txt` to the PWA build and deploys it to `te-tengo-app` (production, branch `main`), and with `partes: todo` `Deploy the landing` rebuilds and deploys `te-tengo-landing`. A run whose mobile ref has no `web/` folder leaves the current PWA deployment as it is.
 
 ## Headers and caching
 

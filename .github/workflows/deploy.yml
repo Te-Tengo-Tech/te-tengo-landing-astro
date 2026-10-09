@@ -1,11 +1,24 @@
 name: Deploy
 
-# Builds the landing and deploys it to Cloudflare Pages (project `te-tengo-landing`,
-# https://tetengo.reqsai.tech, docs/DEPLOY.md):
-#   - push to main      → production deployment, in the `produccion` environment: the job waits until
-#                         one of its required reviewers approves it on the run page;
-#   - pull requests     → preview deployment on the PR branch alias, without approval.
-# A manual run deploys a preview from any branch, and production (with approval) from main.
+# Builds the landing ONCE per run and promotes that same build through Cloudflare Pages (project
+# `te-tengo-landing`, https://tetengo.reqsai.tech, docs/DEPLOY.md):
+#
+#   push to develop  build → deploy-preview  [approval on `preview`]    → branch alias `develop`
+#   push to main     build → deploy-preview  [approval on `preview`]    → branch alias `release-candidate`
+#                          → deploy-production [approval on `produccion`] → https://tetengo.reqsai.tech
+#   pull request     build → deploy-branch (no environment, no approval)  → alias of the PR branch
+#
+# A manual run behaves like a push to the branch it runs on (any other branch: deploy-branch).
+# Every deploy job downloads the `landing-dist` artifact of the build job and checks its fingerprint;
+# none of them builds, so production serves exactly the bytes that were checked on the preview alias.
+# The approvals are not in this file: the required reviewers live in the `preview` and `produccion`
+# environments (Settings → Environments), and `produccion` only accepts the main branch.
+#
+# Switches (Actions variables, organization level; a repository variable with the same name wins).
+# Only the value `true` turns a channel on; unset means off and the job shows as skipped:
+#   ENABLE_LANDING_PREVIEW     deploy-preview (develop and main) and the pull request previews
+#   ENABLE_LANDING_PRODUCCION  deploy-production. With previews off, main goes straight to it.
+#
 # The Flutter PWA is not part of this site: publicar.yml deploys it to its own Pages project
 # (`te-tengo-app`, https://app.tetengo.reqsai.tech), and old /app/* links redirect there
 # (public/_redirects).
@@ -13,7 +26,7 @@ name: Deploy
 # notice with the setup steps and succeeds, without asking for an approval.
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
   workflow_dispatch:
 
@@ -21,8 +34,8 @@ permissions:
   contents: read
   deployments: write
 
-# A newer push to main cancels a run that is still waiting for approval: only the latest commit is
-# offered for production.
+# One run per ref. A newer push to main or develop cancels a run that is still waiting for an
+# approval (or deploying): only the latest commit of each branch is offered.
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
@@ -30,6 +43,7 @@ concurrency:
 env:
   PAGES_PROJECT: te-tengo-landing
   WRANGLER_VERSION: 4.149.0
+  PRODUCTION_URL: https://tetengo.reqsai.tech
 
 jobs:
   build:
@@ -38,8 +52,11 @@ jobs:
     timeout-minutes: 15
     outputs:
       cloudflare: ${{ steps.config.outputs.cloudflare }}
+      dist-sha256: ${{ steps.fingerprint.outputs.sha256 }}
     env:
       HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      ENABLE_PREVIEW: ${{ vars.ENABLE_LANDING_PREVIEW }}
+      ENABLE_PRODUCCION: ${{ vars.ENABLE_LANDING_PRODUCCION }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,7 +74,17 @@ jobs:
           PUBLIC_DESCARGAS_BASE_URL: ${{ vars.DESCARGAS_BASE_URL }}
           PUBLIC_APP_URL: ${{ vars.APP_URL }}
         run: pnpm build
-      # The deploy jobs ship exactly this build, also when production is approved hours later.
+      # One hash over every file of dist/ (path and content). Each deploy job recomputes it on the
+      # downloaded artifact, so the run shows that preview and production shipped the same build.
+      - name: Fingerprint the build
+        id: fingerprint
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          sha=$(find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          echo "sha256=${sha}" >> "$GITHUB_OUTPUT"
+          echo "Build fingerprint: ${sha}"
+      # The deploy jobs ship exactly this build, also when production is approved days later.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: landing-dist
@@ -66,23 +93,43 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ github.event_name == 'pull_request' && 3 || 30 }}
 
-      - name: Check the Cloudflare secrets
+      - name: Check the Cloudflare secrets and the switches
         id: config
+        env:
+          SHA: ${{ steps.fingerprint.outputs.sha256 }}
         run: |
           echo "cloudflare=${HAS_CLOUDFLARE}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Build"
+            echo "- Commit: \`${GITHUB_SHA:0:12}\`, fingerprint of dist/: \`${SHA:0:16}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
           if [ "$HAS_CLOUDFLARE" != true ]; then
             echo "::notice title=Not deployed: Cloudflare secrets missing::Add CLOUDFLARE_API_TOKEN (Cloudflare Pages: Edit, Workers R2 Storage: Edit) and CLOUDFLARE_ACCOUNT_ID under Settings → Secrets and variables → Actions. Steps in docs/DEPLOY.md. The site was built but not deployed."
             {
               echo "### Not deployed"
               echo "The Cloudflare secrets are missing. The build passed; follow docs/DEPLOY.md to enable deployments."
             } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ "$ENABLE_PREVIEW" != true ]; then
+            echo "::notice title=Preview deploys switched off::The Actions variable ENABLE_LANDING_PREVIEW is not 'true', so the develop, release-candidate and pull request previews are skipped."
+            echo "- Previews: switched off (\`ENABLE_LANDING_PREVIEW\`)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$GITHUB_REF" = refs/heads/main ] && [ "$ENABLE_PRODUCCION" != true ]; then
+            echo "::notice title=Production deploy switched off::The Actions variable ENABLE_LANDING_PRODUCCION is not 'true', so this release is not deployed to ${PRODUCTION_URL}."
+            echo "- Production: switched off (\`ENABLE_LANDING_PRODUCCION\`)" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  preview:
-    name: Cloudflare Pages (preview)
+  # Pull requests from this repository, and manual runs from a branch other than main or develop.
+  # No environment: `preview` has required reviewers, and a pull request preview must not wait for
+  # an approval. Pull requests from forks never reach this job (they get no secrets either).
+  deploy-branch:
+    name: Cloudflare Pages (branch preview)
     needs: build
-    # Pull requests (their ref is refs/pull/<n>/merge) and manual runs from a branch other than main.
-    if: github.ref != 'refs/heads/main' && needs.build.outputs.cloudflare == 'true'
+    if: >-
+      github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop'
+      && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      && needs.build.outputs.cloudflare == 'true' && vars.ENABLE_LANDING_PREVIEW == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -95,9 +142,15 @@ jobs:
         env:
           HEAD_REF: ${{ github.head_ref }}
           REF_NAME: ${{ github.ref_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # Only characters Pages accepts in a branch alias; anything else becomes "-".
           branch=$(printf '%s' "${HEAD_REF:-$REF_NAME}" | tr -c 'A-Za-z0-9._/-' '-')
+          # The aliases of main, develop and the release candidate belong to deploy-preview and
+          # deploy-production (e.g. the develop → main release pull request): use pr-<number>.
+          case "$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]')" in
+            main | develop | release-candidate) branch="pr-${PR_NUMBER:-$GITHUB_RUN_ID}" ;;
+          esac
           echo "name=${branch}" >> "$GITHUB_OUTPUT"
       - name: Create the Pages project if it does not exist
         env:
@@ -129,26 +182,134 @@ jobs:
           ALIAS: ${{ steps.pages.outputs.pages-deployment-alias-url }}
         run: |
           {
-            echo "### Cloudflare Pages (preview)"
+            echo "### Cloudflare Pages (branch preview)"
             echo "- Deployment: $URL"
             if [ -n "$ALIAS" ]; then echo "- Branch alias: $ALIAS"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  production:
-    name: Cloudflare Pages (production)
+  # First stage of the promotion: develop → alias `develop`; main → alias `release-candidate`, the
+  # release as it will look in production, checked before anyone approves production.
+  deploy-preview:
+    name: Cloudflare Pages (preview)
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.build.outputs.cloudflare == 'true'
-    # Required reviewers approve this job on the run page; the environment only accepts main.
+    if: >-
+      github.event_name != 'pull_request'
+      && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+      && needs.build.outputs.cloudflare == 'true' && vars.ENABLE_LANDING_PREVIEW == 'true'
+    # Required reviewers of `preview` approve this job on the run page; the environment accepts any
+    # branch. Its URL is the alias of this deployment.
     environment:
-      name: produccion
-      url: https://tetengo.reqsai.tech
+      name: preview
+      url: ${{ steps.pages.outputs.pages-deployment-alias-url }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Pages branch of the stage. Any name except the production branch (main) is a preview
+      # deployment, served at https://<branch>.te-tengo-landing.pages.dev.
+      BRANCH: ${{ github.ref == 'refs/heads/main' && 'release-candidate' || 'develop' }}
+    outputs:
+      url: ${{ steps.pages.outputs.pages-deployment-alias-url }}
     steps:
+      # Only the smoke check script, at the commit of this run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/smoke-check.sh
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: landing-dist
           path: dist
+      - name: Check that the artifact is the build of this run
+        working-directory: dist
+        env:
+          EXPECTED: ${{ needs.build.outputs.dist-sha256 }}
+        run: |
+          set -euo pipefail
+          sha=$(find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          if [ "$sha" != "$EXPECTED" ]; then
+            echo "::error title=Artifact changed::dist/ fingerprint $sha, the build job produced $EXPECTED."
+            exit 1
+          fi
+          echo "Fingerprint $sha matches the build job."
+      - name: Create the Pages project if it does not exist
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if ! npx --yes "wrangler@$WRANGLER_VERSION" pages project list 2> /dev/null | grep -q " $PAGES_PROJECT "; then
+            npx --yes "wrangler@$WRANGLER_VERSION" pages project create "$PAGES_PROJECT" --production-branch main --force
+          fi
+      - name: Deploy to Cloudflare Pages (preview)
+        id: pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          npx --yes "wrangler@$WRANGLER_VERSION" pages deploy dist --project-name="$PAGES_PROJECT" \
+            --branch="$BRANCH" --commit-hash="$GITHUB_SHA" | tee "$RUNNER_TEMP/pages-deploy.log"
+          url=$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' "$RUNNER_TEMP/pages-deploy.log" | head -n1)
+          alias=$(grep -oE "https://${BRANCH}\.${PAGES_PROJECT}\.pages\.dev" "$RUNNER_TEMP/pages-deploy.log" | tail -n1)
+          echo "deployment-url=${url}" >> "$GITHUB_OUTPUT"
+          echo "pages-deployment-alias-url=${alias:-https://${BRANCH}.${PAGES_PROJECT}.pages.dev}" >> "$GITHUB_OUTPUT"
+      - name: Smoke check
+        env:
+          URL: ${{ steps.pages.outputs.pages-deployment-alias-url }}
+          CANONICAL: ${{ vars.SITE_URL || env.PRODUCTION_URL }}
+        run: bash scripts/smoke-check.sh "$URL" "$CANONICAL" dist/index.html
+      - name: Summary
+        if: always()
+        env:
+          URL: ${{ steps.pages.outputs.deployment-url }}
+          ALIAS: ${{ steps.pages.outputs.pages-deployment-alias-url }}
+        run: |
+          {
+            echo "### Cloudflare Pages (preview, \`$BRANCH\`)"
+            echo "- Alias: ${ALIAS:-not deployed}"
+            echo "- Deployment: ${URL:-not deployed}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Second stage, main only: the artifact that passed the preview stage goes to production. It never
+  # builds. With ENABLE_LANDING_PREVIEW off the preview stage is skipped and this job still runs.
+  deploy-production:
+    name: Cloudflare Pages (production)
+    needs: [build, deploy-preview]
+    if: >-
+      !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      && needs.build.result == 'success' && needs.build.outputs.cloudflare == 'true'
+      && vars.ENABLE_LANDING_PRODUCCION == 'true'
+      && (needs.deploy-preview.result == 'success'
+        || (needs.deploy-preview.result == 'skipped' && vars.ENABLE_LANDING_PREVIEW != 'true'))
+    # Required reviewers of `produccion` approve this job on the run page; the environment only
+    # accepts main.
+    environment:
+      name: produccion
+      url: ${{ env.PRODUCTION_URL }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/smoke-check.sh
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: landing-dist
+          path: dist
+      - name: Check that the artifact is the build of this run
+        working-directory: dist
+        env:
+          EXPECTED: ${{ needs.build.outputs.dist-sha256 }}
+        run: |
+          set -euo pipefail
+          sha=$(find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          if [ "$sha" != "$EXPECTED" ]; then
+            echo "::error title=Artifact changed::dist/ fingerprint $sha, the build job produced $EXPECTED."
+            exit 1
+          fi
+          echo "Fingerprint $sha matches the build job (and the preview stage)."
       - name: Create the Pages project if it does not exist
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -168,12 +329,19 @@ jobs:
             --branch=main --commit-hash="$GITHUB_SHA" | tee "$RUNNER_TEMP/pages-deploy.log"
           url=$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' "$RUNNER_TEMP/pages-deploy.log" | head -n1)
           echo "deployment-url=${url}" >> "$GITHUB_OUTPUT"
+      - name: Smoke check
+        env:
+          CANONICAL: ${{ vars.SITE_URL || env.PRODUCTION_URL }}
+        run: bash scripts/smoke-check.sh "$PRODUCTION_URL" "$CANONICAL" dist/index.html
       - name: Summary
+        if: always()
         env:
           URL: ${{ steps.pages.outputs.deployment-url }}
+          PREVIEW: ${{ needs.deploy-preview.outputs.url }}
         run: |
           {
             echo "### Cloudflare Pages (production)"
-            echo "- Site: https://tetengo.reqsai.tech"
-            echo "- Deployment: $URL"
+            echo "- Site: $PRODUCTION_URL"
+            echo "- Deployment: ${URL:-not deployed}"
+            echo "- Promoted from: ${PREVIEW:-no preview stage (ENABLE_LANDING_PREVIEW off)}"
           } >> "$GITHUB_STEP_SUMMARY"

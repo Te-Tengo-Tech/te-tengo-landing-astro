@@ -4,6 +4,15 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+### Added
+
+- Landing promotion in `deploy.yml` ("build once, deploy many"): a push to `develop` deploys the build to the Pages alias `develop` in the `preview` environment; a push to `main` deploys it to the alias `release-candidate` (`deploy-preview`, `preview` environment) and then, with `needs: deploy-preview`, the same `landing-dist` artifact to production (`deploy-production`, `produccion` environment). Both stages wait for their environment's required reviewers, verify the artifact's fingerprint against the build job and end with `scripts/smoke-check.sh` (HTTP 200, canonical URL, byte-identical `index.html`). Pull request previews keep no environment, never deploy pull requests from forks, and use `pr-<number>` when the head branch is `develop` or `main`.
+- On/off switches for every deploy channel, as organization Actions variables that must be `true`: `ENABLE_LANDING_PREVIEW`, `ENABLE_LANDING_PRODUCCION`, `ENABLE_PWA`, `ENABLE_APK` and `ENABLE_WINDOWS_INSTALLER`. A switched-off job shows as skipped and asks for no approval.
+
+### Changed
+
+- `publicar.yml` uploads the APK and the Windows installer to R2 in two jobs, `descargas-apk` and `descargas-windows`, so each has its own switch; `revisar` lists which destinations are switched off.
+
 ## [0.2.0] - 2026-10-08
 
 ### Changed

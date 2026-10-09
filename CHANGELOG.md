@@ -4,6 +4,24 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
+### Added
+
+- Release flow in `deploy.yml` ("build once, deploy many", promoted from the release branch), with only two stages, staging and produccion: a push to `release/*` or `hotfix/*` builds once, deploys the same `landing-dist` artifact to the alias `staging` (environment `staging`, switch `ENABLE_STAGING`, smoke check), then to the Pages production branch `main` = `https://tetengo.reqsai.tech` (environment `produccion`, switch `ENABLE_LANDING_PRODUCCION`, smoke check, the release commit's hash and message attached), then opens the pull request `release/x.y.z → main` with `GITHUB_TOKEN`. Every deploy job runs the new composite action `.github/actions/pages-deploy` (fingerprint check, Wrangler deploy) and deploys nothing when a newer push superseded its commit; no deploying job is cancelled.
+- `etiquetar.yml`: on a push to `main`, the tag `vX.Y.Z` from `package.json` with a GitHub Release whose notes are the CHANGELOG section (skipped if the tag exists), and the back-merge pull request `main → develop`.
+- Downloads: **Mac (beta)** option for Te Tengo Captura (`te-tengo-captura.dmg` on `DESCARGAS_BASE_URL`), with «Próximamente» while downloads are off, platform detection for macOS and Apple's steps to open an app from an unidentified developer (source in `src/content/es.ts`). The section shows two columns from 48rem.
+
+### Changed
+
+- `deploy.yml` only runs on pushes to `release/*` and `hotfix/*`. Nothing deploys on a push to `main` or `develop`, and pull requests only run CI (`ci.yml`).
+- `ci.yml` also runs on pushes to `release/*` and `hotfix/*`, so the release pull request opened by `GITHUB_TOKEN` has its checks.
+
+### Removed
+
+- The dev stage and the pull request previews: no `develop` alias, no `pr-preview` job, no `pull_request` or `workflow_dispatch` trigger in `deploy.yml`. The `dev` environment and the `ENABLE_DEV` variable were deleted; the `preview` environment, the `release-candidate` alias and `ENABLE_LANDING_PREVIEW` are no longer used.
+- `publicar.yml` and the `repository_dispatch` flow from the app repositories: the APK, the Windows installer, the Mac `.dmg` and the PWA are published by the release pipelines of `te-tengo-mobile-flutter` and `te-tengo-desktop-pywebview`.
+
 ## [0.2.0] - 2026-10-08
 
 ### Changed

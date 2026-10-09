@@ -4,6 +4,8 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-08
+
 ### Changed
 
 - Publishing waits for an approval on the `produccion` environment (required reviewers jhosepmyr and elmer-riva, `main` only) instead of depending on who starts a manual run. `deploy.yml` builds once, deploys previews without approval and deploys production, on push to `main`, after approval. `publicar.yml` also starts on `repository_dispatch` from the app repositories when a release reaches their `main`: `publicar-movil` builds the APK and the PWA, `publicar-escritorio` the Windows installer, at the `client_payload.ref` commit, with `client_payload.version` in the run name. Builds and the new `revisar` check run without an environment; the R2 upload, the PWA deployment and the landing deployment (now only on manual runs of every part) are separate `produccion` jobs that wait together, so one approval covers the run. The manual run gains `partes` (`todo`, `movil`, `escritorio`), its refs default to `main`, and the artifacts of publishing runs are kept 30 days.

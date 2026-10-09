@@ -17,15 +17,15 @@
 2. `pnpm install`, then work with `pnpm dev`.
 3. Before pushing: `pnpm lint`, `pnpm check`, `pnpm build` and, for visual changes, `pnpm lhci`.
 4. Open a pull request to `develop` with the template. Every pull request gets a Cloudflare Pages preview (once the secrets exist, [docs/DEPLOY.md](docs/DEPLOY.md)).
-5. **CI must be green before merging.** The organization is on the GitHub Free plan, where branch protection is not enforced on private repositories: reviewers open the checks tab and confirm every job passed.
+5. **CI must be green before merging.** The rulesets `proteger-develop` and `proteger-main` require a pull request with one approval and the `Lint, types and build` check, and block force-pushes and deletions.
 
 ## Continuous integration
 
-| Workflow                                   | Trigger                                                   | What it does                                                                                                                      |
-| ------------------------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [CI](.github/workflows/ci.yml)             | Push to `main`/`develop`, every PR                        | Lint (ESLint + Prettier), `astro check`, build, Lighthouse CI (fails under 95 in any category) with the scores in the run summary |
-| [Deploy](.github/workflows/deploy.yml)     | Push to `main` (production), `develop` and PRs (previews) | Build and `wrangler pages deploy`; without Cloudflare secrets, a notice and success                                               |
-| [Publicar](.github/workflows/publicar.yml) | Manual, **owner only**                                    | Builds the APK, the Windows installer and the PWA from the private repositories and publishes them to R2 and Pages                |
+| Workflow                                   | Trigger                                                                                                 | What it does                                                                                                                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [CI](.github/workflows/ci.yml)             | Push to `main`/`develop`, every PR                                                                      | Lint (ESLint + Prettier), `astro check`, build, Lighthouse CI (fails under 95 in any category) with the scores in the run summary                                                    |
+| [Deploy](.github/workflows/deploy.yml)     | Push to `main` (production), PRs (previews)                                                             | Build and `wrangler pages deploy`; production waits for an approval on the `produccion` environment; without Cloudflare secrets, a notice and success                                |
+| [Publicar](.github/workflows/publicar.yml) | `repository_dispatch` from the app repositories when a release reaches their `main`; manual from `main` | Builds the APK and the PWA, or the Windows installer, and after an approval on `produccion` publishes them to R2 and Pages ([docs/DEPLOY.md](docs/DEPLOY.md#release--approval-flow)) |
 
 Dependabot opens weekly update PRs to `develop` for npm and GitHub Actions.
 

@@ -1,0 +1,143 @@
+name: Rollback
+
+# Puts an earlier final release back in production (docs/DEPLOY.md → Rollback). Manual only, from
+# main: Actions → Rollback → Run workflow → version (e.g. 0.4.0). It never builds: it downloads the
+# bundle attached to the GitHub Release vX.Y.Z, verifies it against that release's candidate record
+# and deploys it to the Pages production branch `main` (https://tetengo.reqsai.tech) after the
+# approval on `produccion`, then runs the smoke check.
+#
+# The landing has no database, so there is nothing to restore. The tags and releases do not change:
+# fix forward with hotfix/x.y.z+1, whose release puts a new version in production.
+#
+# Releases created before the candidate flow (v0.3.0 and older) have no bundle; for those, use the
+# Cloudflare dashboard: Workers & Pages → te-tengo-landing → Deployments → Rollback.
+run-name: Rollback the landing to ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Final release to put back in production, e.g. 0.4.0 (v0.4.0 also works)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  PAGES_PROJECT: te-tengo-landing
+  WRANGLER_VERSION: 4.149.0
+  PRODUCTION_URL: https://tetengo.reqsai.tech
+
+jobs:
+  resolve:
+    name: Find the release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.find.outputs.tag }}
+      commit: ${{ steps.find.outputs.commit }}
+      archive: ${{ steps.find.outputs.archive }}
+      archive-sha256: ${{ steps.find.outputs.archive-sha256 }}
+      dist-sha256: ${{ steps.find.outputs.dist-sha256 }}
+      cloudflare: ${{ steps.find.outputs.cloudflare }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      INPUT_VERSION: ${{ inputs.version }}
+      HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      ENABLE_PRODUCCION: ${{ vars.ENABLE_LANDING_PRODUCCION }}
+    steps:
+      - name: Find the bundle of the release
+        id: find
+        run: |
+          set -euo pipefail
+          version=${INPUT_VERSION#v}
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error title=Invalid version::'${INPUT_VERSION}' is not X.Y.Z."
+            exit 1
+          fi
+          tag="v${version}"
+          if ! release=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" 2> /dev/null); then
+            echo "::error title=No such release::There is no GitHub Release ${tag}."
+            exit 1
+          fi
+          if [ "$(jq -r '.prerelease or .draft' <<< "$release")" = true ]; then
+            echo "::error title=Not a final release::${tag} is a draft or a pre-release; only final releases can be rolled back to."
+            exit 1
+          fi
+          body=$(jq -r .body <<< "$release" | tr -d '\r')
+          field() { printf '%s\n' "$body" | sed -n "s/^$1: //p" | head -n1; }
+          archive=$(field archive)
+          if [ -z "$archive" ] || ! jq -e --arg a "$archive" 'any(.assets[]; .name == $a)' <<< "$release" > /dev/null; then
+            echo "::error title=No bundle in ${tag}::${tag} has no candidate record or no dist/ bundle (it predates the candidate flow). Roll back in the Cloudflare dashboard: Workers & Pages → te-tengo-landing → Deployments → Rollback."
+            exit 1
+          fi
+          {
+            echo "tag=${tag}"
+            echo "commit=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${tag}" --jq .sha)"
+            echo "archive=${archive}"
+            echo "archive-sha256=$(field archive-sha256)"
+            echo "dist-sha256=$(field dist-sha256)"
+            echo "cloudflare=${HAS_CLOUDFLARE}"
+          } >> "$GITHUB_OUTPUT"
+          echo "### Rollback to ${tag}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Bundle \`${archive}\` of ${tag} (candidate $(field candidate))" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$HAS_CLOUDFLARE" != true ]; then
+            echo "::notice title=Not deployed: Cloudflare secrets missing::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (docs/DEPLOY.md)."
+          elif [ "$ENABLE_PRODUCCION" != true ]; then
+            echo "::notice title=Produccion switched off::ENABLE_LANDING_PRODUCCION is not 'true', so nothing is deployed."
+          fi
+
+  rollback:
+    name: Rollback (tetengo.reqsai.tech)
+    needs: resolve
+    if: needs.resolve.outputs.cloudflare == 'true' && vars.ENABLE_LANDING_PRODUCCION == 'true'
+    environment:
+      name: produccion
+      url: ${{ env.PRODUCTION_URL }}
+    # Shared with produccion.yml: one production deployment at a time, none ever cancelled.
+    concurrency:
+      group: landing-produccion
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/
+            scripts/smoke-check.sh
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/pages-deploy
+        id: deploy
+        with:
+          branch: main
+          github-token: ${{ github.token }}
+          release-tag: ${{ needs.resolve.outputs.tag }}
+          archive: ${{ needs.resolve.outputs.archive }}
+          archive-sha256: ${{ needs.resolve.outputs.archive-sha256 }}
+          expected-sha256: ${{ needs.resolve.outputs.dist-sha256 }}
+          commit-hash: ${{ needs.resolve.outputs.commit }}
+          commit-message: Rollback to ${{ needs.resolve.outputs.tag }}
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          project: ${{ env.PAGES_PROJECT }}
+          wrangler-version: ${{ env.WRANGLER_VERSION }}
+      - name: Smoke check
+        if: steps.deploy.outputs.deployed == 'true'
+        env:
+          CANONICAL: ${{ vars.SITE_URL || env.PRODUCTION_URL }}
+        run: bash scripts/smoke-check.sh "$PRODUCTION_URL" "$CANONICAL" dist/index.html
+      - name: Summary
+        if: always()
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          {
+            echo "### Rollback"
+            echo "- ${PRODUCTION_URL} serves ${TAG} again (deployment: ${URL:-not deployed})"
+            echo "- No database: nothing to restore. Fix forward with hotfix/x.y.z+1."
+          } >> "$GITHUB_STEP_SUMMARY"

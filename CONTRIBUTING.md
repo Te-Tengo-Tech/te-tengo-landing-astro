@@ -25,18 +25,18 @@
 2. `pnpm install`, then work with `pnpm dev`.
 3. Before pushing: `pnpm lint`, `pnpm check`, `pnpm build` and, for visual changes, `pnpm lhci`.
 4. Open a pull request to `develop` with the template. Pull requests only run CI: there are no Pages previews, and nothing deploys until a `release/*` or `hotfix/*` branch is pushed ([docs/DEPLOY.md](docs/DEPLOY.md)).
-5. **CI must be green before merging.** The rulesets `proteger-develop` and `proteger-main` require a pull request with one approval and the `Lint, types and build` check, and block force-pushes and deletions.
+5. **CI must be green before merging.** The rulesets `proteger-develop` and `proteger-main` require a pull request with one approval and the checks `ci-ok` (every CI job passed) and `pr-title` (Conventional Commits title); `main` also requires `release-gate`. They block force-pushes and deletions.
 
 ## Continuous integration
 
-| Workflow                                       | Trigger                                                      | What it does                                                                                                                                                                     |
-| ---------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [CI](.github/workflows/ci.yml)                 | Push to `main`, `develop`, `release/*`, `hotfix/*`; every PR | Lint (ESLint + Prettier), `astro check`, build, Lighthouse CI (fails under 95 in any category) with the scores in the run summary                                                |
-| [Release](.github/workflows/release.yml)       | Push to `release/*`, `hotfix/*`                              | Build once → pre-release `vX.Y.Z-rc.N` (bundle + SHA-256 + tree hash) → `staging` alias (approval on `staging`, smoke check) → opens or updates the PR to `main`                 |
-| [Produccion](.github/workflows/produccion.yml) | Push to `main`                                               | Finds the candidate whose tree equals `main`'s → production (approval on `produccion`, same bytes, smoke check) → tag `vX.Y.Z` + GitHub Release → back-merge PR `main → develop` |
-| [Rollback](.github/workflows/rollback.yml)     | Manual, on `main`                                            | Redeploys the bundle of an earlier `vX.Y.Z` to production (approval on `produccion`)                                                                                             |
+| Workflow                                       | Trigger                                        | What it does                                                                                                                                                                     |
+| ---------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [CI](.github/workflows/ci.yml)                 | Every PR, push to `develop`; called by Release | Lint (ESLint + Prettier), `astro check`, build, Lighthouse CI (fails under 95 in any category), then `ci-ok`. PRs into `main` only run `ci-ok` (the candidate was tested)        |
+| [Release](.github/workflows/release.yml)       | Push to `release/*`, `hotfix/*`                | Build once → pre-release `vX.Y.Z-rc.N` (bundle + SHA-256 + tree hash) → `staging` alias (approval on `staging`, smoke check) → opens or updates the PR to `main`                 |
+| [Produccion](.github/workflows/produccion.yml) | Push to `main`                                 | Finds the candidate whose tree equals `main`'s → production (approval on `produccion`, same bytes, smoke check) → tag `vX.Y.Z` + GitHub Release → back-merge PR `main → develop` |
+| [Rollback](.github/workflows/rollback.yml)     | Manual, on `main`                              | Redeploys the bundle of an earlier `vX.Y.Z` to production (approval on `produccion`)                                                                                             |
 
-Dependabot opens weekly update PRs to `develop` for npm and GitHub Actions.
+[PR title](.github/workflows/pr-title.yml) checks that the pull request title is a Conventional Commit, and [Release gate](.github/workflows/release-gate.yml) that a pull request into `main` carries a candidate that passed staging (docs/DEPLOY.md). Dependabot opens weekly update PRs to `develop` for npm and GitHub Actions.
 
 ## Commit messages
 

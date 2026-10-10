@@ -20,8 +20,11 @@ updates:
           - "minor"
           - "patch"
 
+  # The workflows and the composite actions under .github/actions/ (pinned by commit SHA).
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "weekly"
     target-branch: "develop"

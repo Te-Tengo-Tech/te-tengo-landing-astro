@@ -68,12 +68,12 @@ To test the Cloudflare `_headers` and `_redirects` locally: `npx wrangler pages 
 
 Gitflow with a release candidate built once ("model C + tag at the end"): staging gets the candidate from the **release branch**, production gets **the same bytes** from **`main`**, and the tag `vX.Y.Z` comes last, only once that version is live.
 
-- **CI** ([`ci.yml`](.github/workflows/ci.yml)): install, lint, `astro check`, build and Lighthouse CI on every pull request and every push to `main`, `develop`, `release/*` and `hotfix/*`.
-- **Release** ([`release.yml`](.github/workflows/release.yml)): on a push to `release/x.y.z` or `hotfix/x.y.z`, builds `dist/` once and stores it as the asset `te-tengo-landing-X.Y.Z.tar.gz` of the GitHub pre-release `vX.Y.Z-rc.N` (with its SHA-256, the git tree hash and the build number), deploys it to the `staging` alias (environment `staging`, smoke check) and opens or updates the pull request `release/x.y.z → main`.
+- **CI** ([`ci.yml`](.github/workflows/ci.yml)): install, lint, `astro check`, build and Lighthouse CI on every pull request and push to `develop`, and once on each release commit (called by `release.yml`); `ci-ok` is the required check.
+- **Release** ([`release.yml`](.github/workflows/release.yml)): on a push to `release/x.y.z` or `hotfix/x.y.z`, runs CI on the commit, packs the tested `dist/` as the asset `te-tengo-landing-X.Y.Z.tar.gz` of the GitHub pre-release `vX.Y.Z-rc.N` (with its SBOM, SHA-256, attestations, the git tree hash and the build number), deploys it to the `staging` alias (environment `staging`, smoke check) and opens or updates the pull request `release/x.y.z → main` as the GitHub App te-tengo-release-bot; `release-gate` blocks the merge until that candidate passed staging.
 - **Produccion** ([`produccion.yml`](.github/workflows/produccion.yml)): on the push to `main` (the merged release pull request), finds the candidate whose tree equals `main`'s, deploys its bundle without rebuilding to `https://tetengo.reqsai.tech` (environment `produccion`, smoke check), and only then creates the GitHub Release `vX.Y.Z` with the same assets and opens the back-merge `main → develop`.
 - **Rollback** ([`rollback.yml`](.github/workflows/rollback.yml)): manual; puts the bundle of an earlier `vX.Y.Z` back in production (environment `produccion`).
 
-Pushes to `develop` and pull requests only run CI. Without the Cloudflare secrets the candidate is still built and stored, and every deploy explains what is missing.
+Pushes to `develop` and pull requests only run CI. The Cloudflare secrets live in the `staging` and `produccion` environments; a deploy job without them fails and says what is missing.
 
 The apps publish themselves: the APK, the Windows installer and the Mac `.dmg` go to the R2 bucket, and the PWA to the Pages project `te-tengo-app` (`app.tetengo.reqsai.tech`), from the release pipelines of `te-tengo-mobile-flutter` and `te-tengo-desktop-pywebview`. This repository only links to them.
 
@@ -87,9 +87,9 @@ The older `te-tengo` Pages project (Git-connected to the thesis repository, serv
 ### Release flow
 
 ```text
-push to release/x.y.z  ─ release.yml ─▶ candidate: build once → pre-release vX.Y.Z-rc.N (tar.gz + SHA-256 + tree hash)
+push to release/x.y.z  ─ release.yml ─▶ CI once → candidate: the tested dist/ → pre-release vX.Y.Z-rc.N (tar.gz + SBOM + SHA-256 + tree hash)
   (or hotfix/x.y.z)                   └─▶ staging [approval] → https://staging.te-tengo-landing.pages.dev (smoke check)
-                                            └─▶ pull request release/x.y.z → main (merged by a person)
+                                            └─▶ pull request release/x.y.z → main (release-gate, merged by a person)
                        a fix on the release branch → rc.N+1, the pull request is updated
 push to main           ─ produccion.yml ─▶ candidate whose tree = main's (none → fail)
                                          └─▶ produccion [approval] → https://tetengo.reqsai.tech (same bytes, smoke check)

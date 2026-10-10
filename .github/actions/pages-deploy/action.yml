@@ -71,6 +71,19 @@ outputs:
 runs:
   using: composite
   steps:
+    # The Cloudflare token lives in the environment of the calling job (staging or produccion), never in
+    # a job without approval: without it the deploy fails here, before anything is downloaded.
+    - name: Check the Cloudflare secrets
+      shell: bash
+      env:
+        HAS_TOKEN: ${{ inputs.cloudflare-api-token != '' }}
+        HAS_ACCOUNT: ${{ inputs.cloudflare-account-id != '' }}
+      run: |
+        if [ "$HAS_TOKEN" != true ] || [ "$HAS_ACCOUNT" != true ]; then
+          echo "::error title=Cloudflare secrets missing::CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must be secrets of this job's environment (staging or produccion; docs/DEPLOY.md, step 5). Nothing was deployed."
+          exit 1
+        fi
+
     - name: Check that this commit is still the head of the branch
       id: head
       if: inputs.head-ref != ''

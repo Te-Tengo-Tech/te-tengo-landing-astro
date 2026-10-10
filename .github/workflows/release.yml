@@ -3,33 +3,36 @@ name: Release
 # Release candidates of the landing (Gitflow "model C + tag at the end", docs/DEPLOY.md). A push to
 # release/x.y.z or hotfix/x.y.z:
 #
-#   candidate    builds dist/ ONCE and stores it durably as the pre-release vX.Y.Z-rc.N: asset
-#                te-tengo-landing-X.Y.Z.tar.gz + SHA256SUMS, notes with the commit, the git tree hash,
-#                the SHA-256 of every asset, the dist/ fingerprint and the build number.
-#   staging      [approval on `staging`] downloads that bundle, verifies it and deploys it to the
-#                alias `staging` (https://staging.te-tengo-landing.pages.dev) + smoke check.
-#   release-pr   opens (or updates) the pull request release/x.y.z → main, titled `release: x.y.z`,
-#                with the candidate, its hashes and the staging URL.
+#   version      the branch names the version, package.json carries it, vX.Y.Z must not exist yet.
+#   ci           calls ci.yml on this commit (lint, types, build, Lighthouse): the commit is tested once,
+#                here, and the pull request into main does not test it again.
+#   candidate    packs the dist/ that ci built and Lighthouse checked (no second build) and stores it
+#                durably as the pre-release vX.Y.Z-rc.N: te-tengo-landing-X.Y.Z.tar.gz, its SBOM
+#                (te-tengo-landing-X.Y.Z.spdx.json) and SHA256SUMS, with build provenance and SBOM
+#                attestations; the notes hold the candidate record (commit, git tree, hashes, build and
+#                `staging: pending`, or `skipped` when ENABLE_STAGING is off).
+#   staging      [approval on `staging`] downloads that bundle, verifies it, deploys it to the alias
+#                `staging` (https://staging.te-tengo-landing.pages.dev), smoke-checks it and records
+#                `staging: passed` in the candidate.
+#   pull-request opens (or updates) the pull request release/x.y.z → main, `release: x.y.z`, as the GitHub
+#                App te-tengo-release-bot, so its checks run (ci-ok, release-gate, pr-title); editing
+#                it re-runs release-gate, which turns green now that the candidate passed staging.
 #
-# Production is NOT here: merging that pull request runs produccion.yml on main, which deploys the
-# same bundle (found by the tree hash of main) and only then tags vX.Y.Z. A new push to the release
-# branch builds rc.N+1 and updates the pull request; older candidates are kept, never changed.
-#
-# The bundle carries the final version (dist/version.json: version, build, commit); "rc" only lives
-# in the pre-release name. N = 1 + the highest existing vX.Y.Z-rc.* (release or tag).
+# Production is NOT here: merging that pull request runs produccion.yml on main, which deploys the same
+# bundle (found by the tree of main, staging passed) and only then tags vX.Y.Z. A new push to the release
+# branch builds rc.N+1; older candidates are kept, never changed (except their staging line).
 #
 # Switch (organization Actions variable; a repository variable with the same name wins). Only `true`
 # turns it on; unset means off, the job shows as skipped and the run summary says why:
-#   ENABLE_STAGING   the staging job. Off: the pull request to main opens right after the candidate.
-#
-# Without the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets the candidate is still built and
-# stored, staging is skipped with a notice and the pull request says so.
+#   ENABLE_STAGING   the staging job. Off: the candidate is recorded `staging: skipped` and the pull
+#                    request to main opens right after it.
+# Secrets: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID of the `staging` environment (only the staging
+# job reads them); RELEASE_APP_PRIVATE_KEY + variable RELEASE_APP_ID (organization) for the pull request.
 on:
   push:
     branches: ["release/**", "hotfix/**"]
 
-permissions:
-  contents: read
+permissions: {}
 
 env:
   PAGES_PROJECT: te-tengo-landing
@@ -37,41 +40,28 @@ env:
   PRODUCTION_URL: https://tetengo.reqsai.tech
 
 jobs:
-  candidate:
-    name: Build the candidate
+  version:
+    name: Version
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     permissions:
-      contents: write # creates the pre-release vX.Y.Z-rc.N and its tag
-    # One candidate at a time, so two quick pushes never pick the same rc number.
-    concurrency:
-      group: release-candidate
-      cancel-in-progress: false
+      contents: read
     outputs:
-      cloudflare: ${{ steps.version.outputs.cloudflare }}
       version: ${{ steps.version.outputs.version }}
-      commit-message: ${{ steps.version.outputs.commit-message }}
-      tree: ${{ steps.version.outputs.tree }}
-      build: ${{ steps.version.outputs.build }}
-      archive: ${{ steps.pack.outputs.archive }}
-      archive-sha256: ${{ steps.pack.outputs.archive-sha256 }}
-      dist-sha256: ${{ steps.pack.outputs.dist-sha256 }}
-      tag: ${{ steps.publish.outputs.tag }}
-      candidate: ${{ steps.publish.outputs.candidate }}
-      release-url: ${{ steps.publish.outputs.url }}
-    env:
-      GH_TOKEN: ${{ github.token }}
-      HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
-      ENABLE_STAGING: ${{ vars.ENABLE_STAGING }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
+          sparse-checkout: |
+            package.json
+            CHANGELOG.md
+          sparse-checkout-cone-mode: false
       # The branch names the version and package.json carries it; both must agree, and the version
       # must not be released yet (a fix to a released version is a hotfix with a new version).
       - name: Check the version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           version=$(jq -r .version package.json)
@@ -90,63 +80,118 @@ jobs:
           if ! grep -qF "## [${version}]" CHANGELOG.md; then
             echo "::warning title=No CHANGELOG section::CHANGELOG.md has no '## [${version}]' section; the final release notes will only link to the file. Add it on this branch."
           fi
-          {
-            echo "version=${version}"
-            echo "tree=$(git rev-parse 'HEAD^{tree}')"
-            echo "commit-message=$(git log -1 --format=%s HEAD)"
-            echo "build=${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
-            echo "cloudflare=${HAS_CLOUDFLARE}"
-          } >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+  ci:
+    name: CI
+    needs: version
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  candidate:
+    name: Build the candidate
+    needs: [version, ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # creates the pre-release vX.Y.Z-rc.N and its tag
+      id-token: write # signs the attestations (Sigstore)
+      attestations: write # stores them
+    # One candidate at a time, so two quick pushes never pick the same rc number.
+    concurrency:
+      group: release-candidate
+      cancel-in-progress: false
+    outputs:
+      version: ${{ needs.version.outputs.version }}
+      commit-message: ${{ steps.pack.outputs.commit-message }}
+      tree: ${{ steps.pack.outputs.tree }}
+      build: ${{ steps.pack.outputs.build }}
+      archive: ${{ steps.pack.outputs.archive }}
+      archive-sha256: ${{ steps.pack.outputs.archive-sha256 }}
+      dist-sha256: ${{ steps.pack.outputs.dist-sha256 }}
+      staging: ${{ steps.pack.outputs.staging }}
+      tag: ${{ steps.publish.outputs.tag }}
+      candidate: ${{ steps.publish.outputs.candidate }}
+      release-url: ${{ steps.publish.outputs.url }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: Build
-        env:
-          SITE_URL: ${{ vars.SITE_URL }}
-          PUBLIC_DESCARGAS_BASE_URL: ${{ vars.DESCARGAS_BASE_URL }}
-          PUBLIC_APP_URL: ${{ vars.APP_URL }}
-        run: pnpm build
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            pnpm-lock.yaml
+          sparse-checkout-cone-mode: false
+
+      # The dist/ that ci built and Lighthouse checked, in this same run: the candidate is the tested build.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
 
       # dist/version.json names the final version and the build, never "rc": the same bytes go to
       # staging and production (https://tetengo.reqsai.tech/version.json tells what is live).
       - name: Pack the bundle
         id: pack
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          BUILD: ${{ steps.version.outputs.build }}
+          ENABLE_STAGING: ${{ vars.ENABLE_STAGING }}
         run: |
           set -euo pipefail
-          jq -n --arg version "$VERSION" --arg build "$BUILD" --arg commit "$GITHUB_SHA" \
+          build="${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          jq -n --arg version "$VERSION" --arg build "$build" --arg commit "$GITHUB_SHA" \
             '{version: $version, build: $build, commit: $commit}' > dist/version.json
           # One hash over every file of dist/ (path and content), recomputed after every download.
           fingerprint=$(cd dist && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
           archive="te-tengo-landing-${VERSION}.tar.gz"
           mkdir -p "$RUNNER_TEMP/bundle"
           tar -C dist -czf "$RUNNER_TEMP/bundle/${archive}" .
-          (cd "$RUNNER_TEMP/bundle" && sha256sum "$archive" > SHA256SUMS)
-          sha=$(cut -d' ' -f1 "$RUNNER_TEMP/bundle/SHA256SUMS")
+          if [ "$ENABLE_STAGING" = true ]; then staging=pending; else staging=skipped; fi
           {
             echo "archive=${archive}"
-            echo "archive-sha256=${sha}"
+            echo "archive-sha256=$(sha256sum "$RUNNER_TEMP/bundle/${archive}" | cut -d' ' -f1)"
             echo "dist-sha256=${fingerprint}"
+            echo "build=${build}"
+            echo "tree=$(git rev-parse 'HEAD^{tree}')"
+            echo "commit-message=$(git log -1 --format=%s HEAD)"
+            echo "staging=${staging}"
           } >> "$GITHUB_OUTPUT"
 
+      # The dependencies bundled into the site, from pnpm-lock.yaml.
+      - name: SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: spdx-json
+          output-file: ${{ runner.temp }}/bundle/te-tengo-landing-${{ needs.version.outputs.version }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Checksums
+        run: cd "$RUNNER_TEMP/bundle" && sha256sum -- * > "$RUNNER_TEMP/SHA256SUMS" && mv "$RUNNER_TEMP/SHA256SUMS" SHA256SUMS && cat SHA256SUMS
+
+      - name: Build provenance attestation
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/bundle/te-tengo-landing-*.tar.gz
+      - name: SBOM attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/bundle/te-tengo-landing-*.tar.gz
+          sbom-path: ${{ runner.temp }}/bundle/te-tengo-landing-${{ needs.version.outputs.version }}.spdx.json
+
       # Actions artifacts expire; a pre-release does not. The block under "Candidate record" is read
-      # by produccion.yml and rollback.yml: do not edit it by hand.
+      # by find-candidate.sh (produccion.yml, release-gate.yml) and rollback.yml: do not edit it by hand.
       - name: Store the candidate as a pre-release
         id: publish
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          TREE: ${{ steps.version.outputs.tree }}
-          BUILD: ${{ steps.version.outputs.build }}
+          GH_TOKEN: ${{ github.token }}
+          TREE: ${{ steps.pack.outputs.tree }}
+          BUILD: ${{ steps.pack.outputs.build }}
           ARCHIVE: ${{ steps.pack.outputs.archive }}
           ARCHIVE_SHA256: ${{ steps.pack.outputs.archive-sha256 }}
           DIST_SHA256: ${{ steps.pack.outputs.dist-sha256 }}
+          STAGING: ${{ steps.pack.outputs.staging }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -158,16 +203,15 @@ jobs:
           rc=$(( ${last:-0} + 1 ))
           candidate="${VERSION}-rc.${rc}"
           tag="v${candidate}"
-          sums_sha=$(sha256sum "$RUNNER_TEMP/bundle/SHA256SUMS" | cut -d' ' -f1)
           {
-            echo "Release candidate **${candidate}** of the landing, built once from \`${GITHUB_REF_NAME}\` at \`${GITHUB_SHA:0:12}\` (build \`${VERSION}+${BUILD}\`)."
+            echo "Release candidate **${candidate}** of the landing, built once from \`${GITHUB_REF_NAME}\` at \`${GITHUB_SHA:0:12}\` (build \`${VERSION}+${BUILD}\`) and tested there by CI (lint, types, Lighthouse)."
             echo
-            echo "It goes to staging from the release branch and, after the pull request to \`main\` is merged, to production (\`produccion.yml\`) without rebuilding. The final release \`v${VERSION}\` is created only after production succeeds."
+            echo "It goes to staging from the release branch and, after the pull request to \`main\` is merged, to production (\`produccion.yml\`) without rebuilding. The final release \`v${VERSION}\` is created only after production succeeds. Provenance and SBOM attestations: \`gh attestation verify ${ARCHIVE} --repo ${GITHUB_REPOSITORY}\`."
             echo
             echo "| Asset | SHA-256 |"
             echo "|---|---|"
-            echo "| \`${ARCHIVE}\` | \`${ARCHIVE_SHA256}\` |"
-            echo "| \`SHA256SUMS\` | \`${sums_sha}\` |"
+            while read -r sha file; do echo "| \`${file}\` | \`${sha}\` |"; done < "$RUNNER_TEMP/bundle/SHA256SUMS"
+            echo "| \`SHA256SUMS\` | \`$(sha256sum "$RUNNER_TEMP/bundle/SHA256SUMS" | cut -d' ' -f1)\` |"
             echo
             echo "Candidate record (read by the workflows):"
             echo
@@ -180,12 +224,12 @@ jobs:
             echo "archive: ${ARCHIVE}"
             echo "archive-sha256: ${ARCHIVE_SHA256}"
             echo "dist-sha256: ${DIST_SHA256}"
+            echo "staging: ${STAGING}"
             echo "run: ${RUN_URL}"
             echo '```'
           } > "$RUNNER_TEMP/notes.md"
           url=$(gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "$candidate" --notes-file "$RUNNER_TEMP/notes.md" \
-            "$RUNNER_TEMP/bundle/${ARCHIVE}" "$RUNNER_TEMP/bundle/SHA256SUMS")
+            --title "$candidate" --notes-file "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP"/bundle/*)
           {
             echo "tag=${tag}"
             echo "candidate=${candidate}"
@@ -196,17 +240,12 @@ jobs:
             echo "- Pre-release: ${url}"
             echo "- Commit \`${GITHUB_SHA:0:12}\`, tree \`${TREE:0:12}\`, build \`${VERSION}+${BUILD}\`"
             echo "- \`${ARCHIVE}\` SHA-256 \`${ARCHIVE_SHA256:0:16}\`, dist/ fingerprint \`${DIST_SHA256:0:16}\`"
+            if [ "$STAGING" = skipped ]; then
+              echo "- Staging: skipped, switched off (\`ENABLE_STAGING\` is not \`true\`); the pull request to main opens now"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Explain skipped stages
-        run: |
-          set -euo pipefail
-          if [ "$HAS_CLOUDFLARE" != true ]; then
-            echo "::notice title=Staging not deployed: Cloudflare secrets missing::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (docs/DEPLOY.md). The candidate is stored; staging is skipped."
-            echo "- Staging: skipped, the Cloudflare secrets are missing" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "$ENABLE_STAGING" != true ]; then
-            echo "::notice title=Staging switched off::The Actions variable ENABLE_STAGING is not 'true', so the staging alias is skipped and the pull request to main opens now."
-            echo "- Staging: skipped, switched off (\`ENABLE_STAGING\` is not \`true\`)" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$STAGING" = skipped ]; then
+            echo "::notice title=Staging switched off::The Actions variable ENABLE_STAGING is not 'true': the candidate is recorded 'staging: skipped' and the pull request to main opens now."
           fi
 
   # The candidate goes to the alias `staging` (https://staging.te-tengo-landing.pages.dev) and is
@@ -214,7 +253,7 @@ jobs:
   staging:
     name: Staging (alias staging)
     needs: candidate
-    if: needs.candidate.outputs.cloudflare == 'true' && vars.ENABLE_STAGING == 'true'
+    if: vars.ENABLE_STAGING == 'true'
     environment:
       name: staging
       url: ${{ steps.deploy.outputs.alias-url }}
@@ -223,6 +262,8 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write # records `staging: passed` in the candidate's notes
     outputs:
       deployed: ${{ steps.deploy.outputs.deployed }}
       superseded: ${{ steps.deploy.outputs.superseded }}
@@ -256,6 +297,20 @@ jobs:
           URL: ${{ steps.deploy.outputs.alias-url }}
           CANONICAL: ${{ vars.SITE_URL || env.PRODUCTION_URL }}
         run: bash scripts/smoke-check.sh "$URL" "$CANONICAL" dist/index.html
+      # produccion.yml and release-gate.yml accept only a candidate whose staging passed.
+      - name: Record staging passed in the candidate
+        if: steps.deploy.outputs.deployed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.candidate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body | tr -d '\r' \
+            | sed 's/^staging: pending$/staging: passed/' > "$RUNNER_TEMP/notes.md"
+          grep -qx 'staging: passed' "$RUNNER_TEMP/notes.md" \
+            || { echo "::error title=No staging line::The notes of $TAG have no 'staging: pending' line."; exit 1; }
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md" > /dev/null
+          echo "- Recorded \`staging: passed\` in \`$TAG\`" >> "$GITHUB_STEP_SUMMARY"
       - name: Summary
         if: always()
         env:
@@ -270,23 +325,21 @@ jobs:
             echo "- Deployment: ${URL:-not deployed}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # After staging (or with staging switched off or without Cloudflare secrets): open the pull request
-  # <release branch> → main, or update it with the new candidate. Merging it is a human action (the
-  # proteger-main ruleset); the push to main then runs produccion.yml.
-  release-pr:
-    name: Open the release pull request
+  # After staging passed (or with staging switched off): open the pull request <release branch> → main,
+  # or update it with the new candidate, as the GitHub App, so its checks run. Merging it is a human
+  # action (proteger-main ruleset); the push to main then runs produccion.yml.
+  pull-request:
+    name: Pull request to main
     needs: [candidate, staging]
     if: >-
       !cancelled() && needs.candidate.result == 'success'
-      && (needs.staging.result == 'success' || needs.staging.result == 'skipped')
-      && needs.staging.outputs.superseded != 'true'
+      && ((needs.staging.result == 'success' && needs.staging.outputs.deployed == 'true')
+      || (needs.staging.result == 'skipped' && needs.candidate.outputs.staging == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
-      pull-requests: write
     env:
-      GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.candidate.outputs.version }}
       CANDIDATE: ${{ needs.candidate.outputs.candidate }}
       RELEASE_URL: ${{ needs.candidate.outputs.release-url }}
@@ -295,23 +348,40 @@ jobs:
       ARCHIVE: ${{ needs.candidate.outputs.archive }}
       ARCHIVE_SHA256: ${{ needs.candidate.outputs.archive-sha256 }}
       DIST_SHA256: ${{ needs.candidate.outputs.dist-sha256 }}
-      CLOUDFLARE: ${{ needs.candidate.outputs.cloudflare }}
       STAGING_RESULT: ${{ needs.staging.result }}
       STAGING_URL: ${{ needs.staging.outputs.url }}
-      ENABLE_STAGING: ${{ vars.ENABLE_STAGING }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Check the release bot configuration
+        env:
+          APP_ID: ${{ vars.RELEASE_APP_ID }}
+          HAS_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ -z "$APP_ID" ] || [ "$HAS_KEY" != true ]; then
+            echo "::error title=Release bot not configured::The organization variable RELEASE_APP_ID and the organization secret RELEASE_APP_PRIVATE_KEY (GitHub App te-tengo-release-bot) are required to open the pull request. Nothing falls back to GITHUB_TOKEN: its pull requests start no workflows."
+            exit 1
+          fi
+      - name: Mint the release bot token
+        id: bot
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # The App ID; GitHub accepts it as the JWT issuer like the client ID.
+          client-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
       - name: Open or update the pull request to main
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
         run: |
           set -euo pipefail
           if [ "$STAGING_RESULT" = success ]; then
-            staging="deployed and smoke-checked: ${STAGING_URL:-https://staging.te-tengo-landing.pages.dev}"
-          elif [ "$CLOUDFLARE" != true ]; then
-            staging="not deployed: the Cloudflare secrets are missing"
-          elif [ "$ENABLE_STAGING" != true ]; then
-            staging="not deployed: switched off (\`ENABLE_STAGING\` is not \`true\`)"
+            staging="passed: deployed and smoke-checked at ${STAGING_URL:-https://staging.te-tengo-landing.pages.dev}"
           else
-            staging="not deployed"
+            staging="skipped: switched off (\`ENABLE_STAGING\` is not \`true\`)"
           fi
           {
             echo "Release \`${VERSION}\` of the landing from \`${GITHUB_REF_NAME}\`."
@@ -320,23 +390,13 @@ jobs:
             echo "|---|---|"
             echo "| Candidate | [${CANDIDATE}](${RELEASE_URL}) (build \`${VERSION}+${BUILD}\`) |"
             echo "| Commit / tree | \`${GITHUB_SHA:0:12}\` / \`${TREE}\` |"
+            echo "| Tests | CI on this commit (lint, types, build, Lighthouse), in the pipeline run below |"
             echo "| Bundle | \`${ARCHIVE}\`, SHA-256 \`${ARCHIVE_SHA256}\` |"
             echo "| dist/ fingerprint | \`${DIST_SHA256}\` |"
             echo "| Staging | ${staging} |"
             echo "| Pipeline run | ${RUN_URL} |"
             echo
-            echo "Merging runs \`produccion.yml\` on \`main\`: it finds this candidate by the tree hash of \`main\` (it must equal \`${TREE:0:12}\`: true for any merge method as long as \`main\` has nothing this branch lacks; otherwise merge \`main\` into this branch first, which builds a new candidate), deploys the same bundle to https://tetengo.reqsai.tech after the \`produccion\` approval, and only then creates \`v${VERSION}\` and the pull request \`main → develop\`. A new push to \`${GITHUB_REF_NAME}\` builds the next candidate and updates this pull request."
+            echo "\`release-gate\` checks that merging puts exactly this tree into \`main\` and that the candidate passed staging. Merge with a merge commit. Merging runs \`produccion.yml\` on \`main\`: it finds this candidate by the tree of \`main\`, deploys the same bundle to https://tetengo.reqsai.tech after the \`produccion\` approval, and only then creates \`v${VERSION}\` and the pull request \`main → develop\`. A new push to \`${GITHUB_REF_NAME}\` builds the next candidate and updates this pull request."
           } > "$RUNNER_TEMP/body.md"
-
-          number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --base main --state open \
-            --json number --jq '.[0].number // ""')
-          if [ -n "$number" ]; then
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/pulls/${number}" -F "body=@${RUNNER_TEMP}/body.md" > /dev/null
-            gh pr comment "$number" --repo "$GITHUB_REPOSITORY" \
-              --body "New candidate [${CANDIDATE}](${RELEASE_URL}) (commit \`${GITHUB_SHA:0:12}\`); staging: ${staging}. The description now describes it."
-            echo "- Release pull request #${number} updated with ${CANDIDATE}" >> "$GITHUB_STEP_SUMMARY"
-          else
-            url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$GITHUB_REF_NAME" \
-              --title "release: ${VERSION}" --body-file "$RUNNER_TEMP/body.md")
-            echo "- Release pull request opened: $url" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          .github/scripts/open-release-pr.sh "release: ${VERSION}" "$RUNNER_TEMP/body.md" \
+            "New candidate [${CANDIDATE}](${RELEASE_URL}) (commit \`${GITHUB_SHA:0:12}\`), staging ${staging%%:*}. The description now describes it."

@@ -4,6 +4,8 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-10
+
 ### Changed
 
 - CI tests each commit once: `ci.yml` runs on pull requests, on pushes to `develop` and when `release.yml` calls it (`workflow_call`) on the release commit; it no longer runs on pushes to `main`, `release/*` or `hotfix/*`. Pull requests into `main` skip the test jobs (their head is the tested candidate). The candidate packs the `dist/` that CI built and Lighthouse checked, instead of building a second time.

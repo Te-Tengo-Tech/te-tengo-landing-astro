@@ -23,16 +23,22 @@ An old `te-tengo-web.tar.gz` object in the bucket is unused and can be deleted b
 
 ## Workflows
 
-| Workflow         | Trigger                                                 | Approval (environment) | Needs                                                                                                                                  |
-| ---------------- | ------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`         | push to `main`, `develop`, `release/*`, `hotfix/*`; PRs | no                     | nothing                                                                                                                                |
-| `release.yml`    | push to `release/*`, `hotfix/*`                         | `staging`              | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variables `ENABLE_STAGING`, `DESCARGAS_BASE_URL`, `SITE_URL` and `APP_URL` (optional) |
-| `produccion.yml` | push to `main` (the merged release PR); manual on main  | `produccion`           | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variable `ENABLE_LANDING_PRODUCCION`                                                  |
-| `rollback.yml`   | manual on main, input `version`                         | `produccion`           | the same as `produccion.yml`; the release `vX.Y.Z` must carry its bundle (releases made by `produccion.yml`; not `v0.3.0` or older)    |
+| Workflow           | Trigger                                                   | Approval (environment) | Needs                                                                                                                                                                                                            |
+| ------------------ | --------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`           | pull requests; push to `develop`; called by `release.yml` | no                     | nothing                                                                                                                                                                                                          |
+| `pr-title.yml`     | pull requests (opened, edited, synchronize)               | no                     | nothing                                                                                                                                                                                                          |
+| `release-gate.yml` | pull requests into `main` (opened, edited, synchronize)   | no                     | nothing (reads the candidates with `GITHUB_TOKEN`)                                                                                                                                                               |
+| `release.yml`      | push to `release/*`, `hotfix/*`                           | `staging`              | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` of `staging`; `RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY` (organization); variables `ENABLE_STAGING`, `DESCARGAS_BASE_URL`, `SITE_URL` and `APP_URL` (optional) |
+| `produccion.yml`   | push to `main` (the merged release PR); manual on main    | `produccion`           | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` of `produccion`; `RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`; variable `ENABLE_LANDING_PRODUCCION`                                                              |
+| `rollback.yml`     | manual on main, input `version`                           | `produccion`           | the same as `produccion.yml`; the release `vX.Y.Z` must carry its bundle (releases made by `produccion.yml`; not `v0.3.0` or older)                                                                              |
 
-Pull requests and pushes to `develop` only run `ci.yml`: there is no dev stage and no pull request preview. `deploy.yml` and `etiquetar.yml` were replaced by `release.yml` and `produccion.yml`.
+Pull requests and pushes to `develop` only run checks (`ci.yml`, `pr-title.yml`): there is no dev stage and no pull request preview.
 
-Every step whose secret or variable is missing prints a `::notice` with what to set and is skipped, so the workflows stay green before the setup is done.
+**Required checks** (rulesets): `develop` requires `ci-ok` and `pr-title`; `main` requires `ci-ok`, `release-gate` and `pr-title`. `ci-ok` is the last job of `ci.yml`; it always runs and fails unless every CI job passed, so it is the one stable name the rulesets need, whatever jobs CI grows.
+
+**The release bot.** Every pull request a workflow opens (`release: x.y.z` into `main`, the back-merge into `develop`) is opened by the GitHub App **te-tengo-release-bot** (`actions/create-github-app-token`, organization variable `RELEASE_APP_ID` and secret `RELEASE_APP_PRIVATE_KEY`), never with `GITHUB_TOKEN`: a pull request opened with `GITHUB_TOKEN` starts no `pull_request` workflow, so its required checks would never run, and since June 2026 GitHub also leaves phantom "action required" runs on it. Without the App the job fails with an error that says so; nothing falls back to `GITHUB_TOKEN`.
+
+A missing Cloudflare secret fails the deploy job that needs it (`staging`, `produccion`, `rollback`), with an error naming it; switched-off stages are skipped with a notice.
 
 ### Switches
 
@@ -48,8 +54,8 @@ gh variable set ENABLE_STAGING --org Te-Tengo-Tech --visibility all --body true 
 gh variable set ENABLE_STAGING --body false                                       # override in this repository only
 ```
 
-- `ENABLE_STAGING` off: the candidate is still built and stored, and the pull request to `main` opens right after it (its description says staging was skipped). Useful for an urgent hotfix; production still needs its approval.
-- `ENABLE_LANDING_PRODUCCION` off (or no Cloudflare secrets): the merged release reaches `main` but nothing is deployed, so **no tag `vX.Y.Z` and no back-merge** are created. Turn it on and run _Produccion_ on `main` again (_Actions → Produccion → Run workflow_, or _Re-run all jobs_): it finds the same candidate and deploys it.
+- `ENABLE_STAGING` off: the candidate is still built and stored, recorded `staging: skipped`, and the pull request to `main` opens right after it (its description says staging was skipped). Useful for an urgent hotfix; production still needs its approval.
+- `ENABLE_LANDING_PRODUCCION` off: the merged release reaches `main` but nothing is deployed, so **no tag `vX.Y.Z` and no back-merge** are created. Turn it on and run _Produccion_ on `main` again (_Actions → Produccion → Run workflow_, or _Re-run all jobs_): it finds the same candidate and deploys it.
 
 The other organization switches (`ENABLE_PWA`, `ENABLE_APK`, `ENABLE_WINDOWS_INSTALLER`, `ENABLE_MAC_DMG`, …) belong to the app repositories.
 
@@ -59,56 +65,82 @@ The team's release strategy, "model C + tag at the end": [Gitflow](https://nvie.
 
 ```mermaid
 flowchart TB
+  subgraph pr["pull request into develop / push to develop"]
+    CI1["ci.yml: check → lighthouse → ci-ok<br/>pr-title.yml: pr-title"]
+  end
   subgraph rel["push to release/x.y.z or hotfix/x.y.z — release.yml"]
-    C["candidate<br/>build dist/ once<br/>pre-release vX.Y.Z-rc.N<br/>tar.gz + SHA256SUMS + record (commit, tree, hashes, build)"]
-    S["staging<br/>env staging · approval<br/>download + verify → alias staging + smoke check"]
-    R["release-pr<br/>open / update PR release/x.y.z → main"]
-    C --> S --> R
+    V["version<br/>branch = package.json, vX.Y.Z not released"]
+    CI2["ci (calls ci.yml)<br/>lint, types, build, Lighthouse: tested once"]
+    C["candidate<br/>packs the tested dist/ (no rebuild)<br/>pre-release vX.Y.Z-rc.N: tar.gz + SBOM + SHA256SUMS<br/>provenance + SBOM attestations<br/>record: commit, tree, hashes, build, staging: pending"]
+    S["staging<br/>env staging · approval<br/>download + verify → alias staging + smoke check<br/>record staging: passed"]
+    R["pull-request (te-tengo-release-bot)<br/>open / update PR release/x.y.z → main"]
+    V --> CI2 --> C --> S --> R
+  end
+  subgraph gate["pull request into main"]
+    G["release-gate.yml: release-gate<br/>test merge tree = tree of an approved candidate<br/>ci.yml: only ci-ok (no second test run)"]
   end
   subgraph main["push to main (merged release PR) — produccion.yml"]
-    F["candidate<br/>newest vX.Y.Z-rc.N whose tree = tree of main<br/>none → fail"]
-    P["produccion<br/>env produccion · approval<br/>download + verify → branch main = tetengo.reqsai.tech + smoke check"]
-    T["release<br/>tag vX.Y.Z + GitHub Release (same assets)<br/>PR main → develop"]
-    F --> P --> T
+    F["candidate<br/>find-candidate.sh: newest vX.Y.Z-rc.N with the tree of main<br/>and staging passed/skipped; none → fail"]
+    P["produccion<br/>env produccion · approval<br/>download + verify → branch main = tetengo.reqsai.tech<br/>smoke check + version.json = candidate build"]
+    T["release<br/>tag vX.Y.Z + GitHub Release (same assets)"]
+    B["back-merge (te-tengo-release-bot)<br/>PR main → develop, auto-merge;<br/>after a hotfix also main → newer release/*"]
+    F --> P --> T --> B
   end
   subgraph rb["manual — rollback.yml"]
     RB["rollback<br/>env produccion · approval<br/>bundle of vX.Y.Z → branch main + smoke check"]
   end
-  R -. "merged by a person" .-> F
-  QA["QA finds a bug: fix on the release branch"] -. "push → rc.N+1" .-> C
+  R -. "edited → gate runs again" .-> G
+  G -. "merged by a person (merge commit)" .-> F
+  QA["QA finds a bug: fix on the release branch"] -. "push → rc.N+1" .-> V
   S -.-> QA
 ```
 
-| Event                             | Jobs                                   | Environment (approval)                 | Result                                                                                       |
-| --------------------------------- | -------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------- |
-| push to `release/*` or `hotfix/*` | `candidate` → `staging` → `release-pr` | `staging` (jhosepmyr or elmer-riva)    | pre-release `vX.Y.Z-rc.N`, `https://staging.te-tengo-landing.pages.dev`, PR `release: x.y.z` |
-| push to `main`                    | `candidate` → `produccion` → `release` | `produccion` (jhosepmyr or elmer-riva) | `https://tetengo.reqsai.tech`, then tag `vX.Y.Z` + GitHub Release, then PR `main → develop`  |
-| Rollback (manual, on `main`)      | `resolve` → `rollback`                 | `produccion`                           | `https://tetengo.reqsai.tech` serves the bundle of an earlier `vX.Y.Z`                       |
-| push to `develop`, pull request   | `ci.yml` only                          | none                                   | nothing deploys                                                                              |
+| Event                                          | Jobs                                                         | Environment (approval)                 | Result                                                                                       |
+| ---------------------------------------------- | ------------------------------------------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------- |
+| pull request into `develop`, push to `develop` | `ci.yml`: `check` → `lighthouse` → `ci-ok`; `pr-title` (PRs) | none                                   | checks only, nothing deploys                                                                 |
+| push to `release/*` or `hotfix/*`              | `version` → `ci` → `candidate` → `staging` → `pull-request`  | `staging` (jhosepmyr or elmer-riva)    | pre-release `vX.Y.Z-rc.N`, `https://staging.te-tengo-landing.pages.dev`, PR `release: x.y.z` |
+| pull request into `main`                       | `release-gate`; `ci.yml`: only `ci-ok`; `pr-title`           | none                                   | mergeable once the candidate of the head passed staging                                      |
+| push to `main`                                 | `candidate` → `produccion` → `release` → `back-merge`        | `produccion` (jhosepmyr or elmer-riva) | `https://tetengo.reqsai.tech`, then tag `vX.Y.Z` + GitHub Release, then PR `main → develop`  |
+| Rollback (manual, on `main`)                   | `resolve` → `rollback`                                       | `produccion`                           | `https://tetengo.reqsai.tech` serves the bundle of an earlier `vX.Y.Z`                       |
 
 ### The candidate (release.yml)
 
-- **Version.** `package.json` `version` is the version. The branch must be `release/<version>` or `hotfix/<version>` and `vX.Y.Z` must not exist yet; otherwise the candidate job fails and says what to fix. Bump `package.json` and add the `## [x.y.z]` section to `CHANGELOG.md` on the release branch.
-- **Built once.** `pnpm build`, then `dist/version.json` (`version`, `build`, `commit`; the build number is `<run number>.<attempt>`, so it grows with every candidate). The bundle carries the final version: "rc" only exists in the name of the pre-release.
-- **Stored durably.** Actions artifacts expire, so the bundle `te-tengo-landing-X.Y.Z.tar.gz` and `SHA256SUMS` are the assets of a GitHub **pre-release** `vX.Y.Z-rc.N` on the release commit (`N` = 1 + the highest existing `vX.Y.Z-rc.*`). Its notes hold a _candidate record_: version, candidate, build, commit, git tree (`git rev-parse HEAD^{tree}`), archive name, archive SHA-256, `dist/` fingerprint (one SHA-256 over every path and content) and the run. Candidates are never edited or deleted; a rejected one simply stays a pre-release. `rc` tags only live on release branches' commits; `vX.Y.Z` is never created here.
-- **Staging.** `staging` (environment `staging`) runs [`.github/actions/pages-deploy`](../.github/actions/pages-deploy/action.yml): it downloads the bundle from the pre-release, checks its SHA-256 against the record and against the digest GitHub computed on upload, unpacks it, checks the `dist/` fingerprint and deploys it with `wrangler pages deploy --branch=staging`. Then `scripts/smoke-check.sh`: `200`, the canonical link to `https://tetengo.reqsai.tech/` (or `SITE_URL`) and the served `index.html` byte for byte the bundle's.
-- **The release pull request.** `release-pr` opens `release/x.y.z → main` titled `release: x.y.z` with `GITHUB_TOKEN`, listing the candidate, its hashes and the staging URL. A new push to the branch builds `rc.N+1`, and the pull request description is replaced (plus a comment) once that candidate passes staging. A rejected staging approval or a failed smoke check opens nothing. A pull request opened with `GITHUB_TOKEN` starts no `pull_request` workflows, so its required check `Lint, types and build` comes from the `ci.yml` run of the push to the release branch, on the same commit.
+- **Version.** `package.json` `version` is the version. The branch must be `release/<version>` or `hotfix/<version>` and `vX.Y.Z` must not exist yet; otherwise the `version` job fails and says what to fix. Bump `package.json` and add the `## [x.y.z]` section to `CHANGELOG.md` on the release branch.
+- **Tested once.** The `ci` job calls `ci.yml` on the release commit (lint, `astro check`, build, Lighthouse). This is the only test run of the release: the pull request into `main` does not test it again (its `ci-ok` only checks that it comes from a release branch) and nothing is tested on `main`; `release-gate` proves that `main` gets exactly this tested tree.
+- **Built once.** `candidate` takes the `dist/` that `ci` built and Lighthouse checked in the same run (no second build), adds `dist/version.json` (`version`, `build`, `commit`; the build number is `<run number>.<attempt>`, so it grows with every candidate) and packs it. The bundle carries the final version: "rc" only exists in the name of the pre-release.
+- **Stored durably.** Actions artifacts expire, so the bundle `te-tengo-landing-X.Y.Z.tar.gz`, its SBOM `te-tengo-landing-X.Y.Z.spdx.json` (SPDX, from `pnpm-lock.yaml`) and `SHA256SUMS` are the assets of a GitHub **pre-release** `vX.Y.Z-rc.N` on the release commit (`N` = 1 + the highest existing `vX.Y.Z-rc.*`). Its notes hold a _candidate record_: version, candidate, build, commit, git tree (`git rev-parse HEAD^{tree}`), archive name, archive SHA-256, `dist/` fingerprint (one SHA-256 over every path and content), `staging` (`pending`, `passed`, or `skipped` when `ENABLE_STAGING` was off) and the run. Candidates are never deleted and only their `staging` line ever changes; a rejected one simply stays `pending`. `rc` tags only live on release branches' commits; `vX.Y.Z` is never created here.
+- **Attestations.** The bundle gets a build provenance attestation and an SBOM attestation (Sigstore, stored by GitHub). Anyone can check a downloaded bundle: `gh attestation verify te-tengo-landing-X.Y.Z.tar.gz --repo Te-Tengo-Tech/te-tengo-landing-astro`. Production deploys the same bytes, so the attestations hold for the final release too.
+- **Staging.** `staging` (environment `staging`) runs [`.github/actions/pages-deploy`](../.github/actions/pages-deploy/action.yml): it checks the Cloudflare secrets of the environment, downloads the bundle from the pre-release, checks its SHA-256 against the record and against the digest GitHub computed on upload, unpacks it, checks the `dist/` fingerprint and deploys it with `wrangler pages deploy --branch=staging`. Then `scripts/smoke-check.sh`: `200`, the canonical link to `https://tetengo.reqsai.tech/` (or `SITE_URL`) and the served `index.html` byte for byte the bundle's. Only then is `staging: passed` written into the candidate record.
+- **The release pull request.** `pull-request` opens `release/x.y.z → main` titled `release: x.y.z` as **te-tengo-release-bot**, listing the candidate, its hashes, the staging URL and the run. A new push to the branch builds `rc.N+1`, and the pull request description is replaced (plus a comment) once that candidate passes staging. A rejected staging approval or a failed smoke check opens nothing. Because the App opens it, its checks run like any pull request's.
+
+### The release gate (release-gate.yml)
+
+The required check `release-gate` of every pull request into `main` ([`.github/scripts/release-gate.sh`](../.github/scripts/release-gate.sh), the same script in every Te Tengo repository) passes only when:
+
+1. the head is `release/x.y.z` or `hotfix/x.y.z` of this repository, `package.json` at the head says `x.y.z`, and `vX.Y.Z` does not exist;
+2. GitHub's test merge of the pull request has the same git tree as the head, i.e. `main` has nothing the branch lacks (otherwise: merge `main` into the branch, which builds a new candidate);
+3. [`.github/scripts/find-candidate.sh`](../.github/scripts/find-candidate.sh) finds a candidate of `x.y.z` with that tree and `staging: passed` (or `skipped`). `produccion.yml` uses the same script after the merge, so a green gate means production finds its candidate.
+
+A push to the release branch makes the gate fail until the candidate of that commit has passed staging; the `pull-request` job then edits the pull request, and that `edited` event runs the gate again. Merge with a **merge commit**.
 
 ### Production and the tag (produccion.yml)
 
-- **Identity.** On the push to `main`, `candidate` looks for the newest `vX.Y.Z-rc.N` (X.Y.Z from `package.json` on `main`) whose recorded tree equals `git rev-parse HEAD^{tree}` of `main`, and checks that the rc tag points at a commit with that same tree. Any merge method (merge commit, squash, rebase) keeps the tree when `main` has nothing the release branch lacks. If no candidate matches, the run fails with "main differs from every tested candidate": merge `main` into the release branch (or push the missing change there), which builds and tests a new rc, then merge again.
-- **Same bytes.** `produccion` (environment `produccion`) runs the same `pages-deploy` action with the candidate's tag, so production gets the exact file staging got (SHA-256, GitHub digest and fingerprint checked again), deployed with `--branch=main` under the `main` commit's hash and subject. Smoke check of `https://tetengo.reqsai.tech`.
-- **Tag at the end.** Only when `produccion` deployed, `release` creates the GitHub Release `vX.Y.Z` on the `main` commit with the candidate's own assets (verified with `SHA256SUMS`), notes = the CHANGELOG section + the candidate and its record (read by `rollback.yml`). Then it opens `main → develop` (`chore: merge release x.y.z back into develop`) when `main` has commits `develop` lacks and no such pull request is open. If `produccion` failed, was rejected or skipped: no tag. _Re-run failed jobs_ deploys the same candidate; a re-run after a complete release sees the tag on the commit and does nothing.
-- **Hotfix.** `hotfix/x.y.(z+1)` from `main` with the bumped `package.json`: the same pipeline (candidate → staging → PR to `main` → produccion → tag → back-merge). With `ENABLE_STAGING` off it goes straight to the pull request; production still asks for its approval.
+- **Identity.** On the push to `main`, `candidate` runs `find-candidate.sh` with the version of `package.json` and `git rev-parse HEAD^{tree}` of `main`: the newest `vX.Y.Z-rc.N` whose recorded tree equals it, whose rc tag points at a commit with that same tree and whose staging passed (or was switched off). If none matches, the run fails with "main is not the tree of any candidate that passed staging": merge `main` into the release branch (or push the missing change there), which builds and tests a new rc, then merge again. No CI runs on `main`: the release was tested on its branch.
+- **Same bytes.** `produccion` (environment `produccion`) runs the same `pages-deploy` action with the candidate's tag, so production gets the exact file staging got (SHA-256, GitHub digest and fingerprint checked again), deployed with `--branch=main` under the `main` commit's hash and subject. Post-deploy check: the smoke check of `https://tetengo.reqsai.tech` plus `version.json`, which must name the candidate's version and build (proof that the new bundle is the one served).
+- **Tag at the end.** Only when `produccion` deployed, `release` creates the GitHub Release `vX.Y.Z` on the `main` commit with the candidate's own assets (bundle, SBOM, `SHA256SUMS`, verified again), notes = the CHANGELOG section + the candidate and its record (read by `rollback.yml`). If `produccion` failed, was rejected, superseded or switched off: no tag. _Re-run failed jobs_ deploys the same candidate; a re-run after a complete release sees the tag on the commit and does nothing.
+- **Back-merge.** `back-merge` ([`.github/scripts/back-merge.sh`](../.github/scripts/back-merge.sh)) opens `main → develop` (`chore: merge release x.y.z back into develop`) as te-tengo-release-bot and turns on **auto-merge with a merge commit**: it merges itself once approved and green (if the repository does not allow auto-merge, it stays open with a warning). After a hotfix, it also opens `main → release/a.b.c` for every open release branch with a newer version that lacks the fix (no auto-merge: that merge builds a new candidate).
+- **Hotfix.** `hotfix/x.y.(z+1)` from `main` with the bumped `package.json`: the same pipeline (candidate → staging → PR to `main` → release gate → produccion → tag → back-merge). With `ENABLE_STAGING` off it goes straight to the pull request; production still asks for its approval.
 
 ### Rollback (rollback.yml)
 
-_Actions → Rollback → Run workflow_ on `main`, `version` = an earlier final release (e.g. `0.4.0`). `resolve` reads the candidate record from the notes of `vX.Y.Z`; `rollback` (environment `produccion`, switch `ENABLE_LANDING_PRODUCCION`) deploys that release's bundle with the same checks and runs the smoke check. Nothing is rebuilt and no tag changes; fix forward with a hotfix. The landing has **no database**, so there is nothing to restore. Releases up to `v0.3.0` predate the candidate flow and carry no bundle: for those, use _Workers & Pages → te-tengo-landing → Deployments → Rollback_ in the Cloudflare dashboard.
+_Actions → Rollback → Run workflow_ on `main`, `version` = an earlier final release (e.g. `0.4.0`). `resolve` reads the candidate record from the notes of `vX.Y.Z`; `rollback` (environment `produccion`, switch `ENABLE_LANDING_PRODUCCION`) deploys that release's bundle with the same checks and runs the smoke check and the `version.json` check. Nothing is rebuilt and no tag changes; fix forward with a hotfix. The landing has **no database**, so there is nothing to restore. Releases up to `v0.3.0` predate the candidate flow and carry no bundle: for those, use _Workers & Pages → te-tengo-landing → Deployments → Rollback_ in the Cloudflare dashboard.
+
+**Rehearsal.** The rollback has never run in production. Rehearse it once, and again after any change to `rollback.yml` or `pages-deploy`: run _Rollback_ with the version that is live right now (today `0.4.0`). It redeploys the same bytes, so visitors see no change, but it exercises the whole path: the approval, the download and its three checks, the deploy and the post-deploy checks. Then check `https://tetengo.reqsai.tech/version.json` and write the date, the run URL and the result in the team's operations log. After the next release, rehearse a real step back (the previous version) and forward again (_Rollback_ with the new version).
 
 ### Environments, re-runs and queues
 
 - **Environments.** `staging` accepts `release/*` and `hotfix/*`; `produccion` accepts `main`. Both have the required reviewers jhosepmyr and elmer-riva. The `dev` environment and `ENABLE_DEV` were deleted; the old `preview` environment is no longer used.
-- **Concurrency.** Only one candidate is built at a time (group `release-candidate`), so two quick pushes never get the same `rc` number. No deploying job is ever cancelled: staging has a group per branch, and `produccion` and `rollback` share the group `landing-produccion` (`cancel-in-progress: false`). Before deploying, `pages-deploy` checks that the branch (`release/*` for staging, `main` for production) still points at the run's commit; if a newer push superseded it, the job deploys nothing, also after an approval, and the next steps are skipped.
+- **Concurrency.** Only one candidate is built at a time (group `release-candidate`), so two quick pushes never get the same `rc` number. No deploying job is ever cancelled: staging has a group per branch, and `produccion` and `rollback` share the group `landing-produccion` (`cancel-in-progress: false`). `ci.yml`, when `release.yml` calls it, uses its own group (`ci-Release-push-<ref>`), never the caller's, so a call can never wait for its own run. Before deploying, `pages-deploy` checks that the branch (`release/*` for staging, `main` for production) still points at the run's commit; if a newer push superseded it, the job deploys nothing, also after an approval, and the next steps are skipped.
 - **Pull requests deploy nothing.** Review a change in its pull request and locally (`pnpm build && npx wrangler pages dev dist`); the first deployed copy is the `staging` alias of its release branch.
 - **What is live.** `https://tetengo.reqsai.tech/version.json` shows the version, build and commit of the bundle in production.
 
@@ -165,24 +197,32 @@ For each project:
 
 ### 5. GitHub secrets, variables and settings
 
-_Settings → Secrets and variables → Actions_ of this repository:
+The Cloudflare token deploys, so it lives in the **environments**, not in the repository: only a job that passed its environment's rules (branch policy and required reviewers) can read it. _Settings → Environments → staging_ and _→ produccion_, _Environment secrets_:
 
-| Name                    | Kind     | Value                                                                                                               |
-| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`  | secret   | The token of step 3                                                                                                 |
-| `CLOUDFLARE_ACCOUNT_ID` | secret   | The Account ID of step 1                                                                                            |
-| `DESCARGAS_BASE_URL`    | variable | Public URL of the R2 bucket, without a trailing slash (organization variable)                                       |
-| `SITE_URL`              | variable | Optional: the canonical origin of the landing (default `https://tetengo.reqsai.tech`)                               |
-| `APP_URL`               | variable | Optional: the PWA URL the landing links to, passed as `PUBLIC_APP_URL` (default `https://app.tetengo.reqsai.tech/`) |
+| Name                    | Kind               | Value                                                                                           |
+| ----------------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | environment secret | The token of step 3 (one token per environment is better: the staging one can be revoked alone) |
+| `CLOUDFLARE_ACCOUNT_ID` | environment secret | The Account ID of step 1                                                                        |
 
 ```bash
-gh secret set CLOUDFLARE_API_TOKEN
-gh secret set CLOUDFLARE_ACCOUNT_ID
+gh secret set CLOUDFLARE_API_TOKEN --env staging
+gh secret set CLOUDFLARE_ACCOUNT_ID --env staging
+gh secret set CLOUDFLARE_API_TOKEN --env produccion
+gh secret set CLOUDFLARE_ACCOUNT_ID --env produccion
+gh secret delete CLOUDFLARE_API_TOKEN && gh secret delete CLOUDFLARE_ACCOUNT_ID   # the old repository copies
 ```
 
-The app repositories keep their own `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets for their R2 uploads and the PWA deployment. This repository no longer builds the apps, so its earlier app-building secrets and variables (`TT_REPOS_TOKEN`, the Android keystore, `GOOGLE_SERVICES_JSON`, `TT_API_URL`, `DESCARGAS_R2_BUCKET`, the Firebase web values) are not read by any workflow here.
+_Settings → Secrets and variables → Actions → Variables_:
 
-`release-pr` (`release.yml`) and `release` (`produccion.yml`) open pull requests with `GITHUB_TOKEN`, which needs _Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests_ (repository or organization level). Without it, `gh pr create` fails with a permissions error and the pull request has to be opened by hand.
+| Name                 | Kind     | Value                                                                                                               |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `DESCARGAS_BASE_URL` | variable | Public URL of the R2 bucket, without a trailing slash (organization variable)                                       |
+| `SITE_URL`           | variable | Optional: the canonical origin of the landing (default `https://tetengo.reqsai.tech`)                               |
+| `APP_URL`            | variable | Optional: the PWA URL the landing links to, passed as `PUBLIC_APP_URL` (default `https://app.tetengo.reqsai.tech/`) |
+
+The organization variable `RELEASE_APP_ID` and secret `RELEASE_APP_PRIVATE_KEY` belong to the GitHub App te-tengo-release-bot (installed on every repository of the organization with Contents, Pull requests, Actions and Workflows: read and write). `GITHUB_TOKEN` no longer opens pull requests here, so _Allow GitHub Actions to create and approve pull requests_ is not needed.
+
+The app repositories keep their own Cloudflare secrets for their R2 uploads and the PWA deployment. This repository no longer builds the apps: the copies of the Android keystore (`ANDROID_KEYSTORE_*`), `GOOGLE_SERVICES_JSON` and `TT_REPOS_TOKEN` it still holds are read by no workflow and should be deleted, and so should the variables `TT_API_URL`, `DESCARGAS_R2_BUCKET` and the Firebase web values.
 
 ## Headers and caching
 

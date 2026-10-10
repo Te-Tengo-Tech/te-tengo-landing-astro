@@ -22,7 +22,7 @@
 - [ ] Lighthouse CI is green (≥ 95 in every category); scores pasted below
 - [ ] Conventional Commits in English, with no co-author or AI attribution lines
 - [ ] `CHANGELOG.md` is updated
-- [ ] CI is green (branch protection is not enforced on our plan: reviewers check it before merging)
+- [ ] The required checks `ci-ok` and `pr-title` are green (the title is a Conventional Commit)
 
 ## Lighthouse
 

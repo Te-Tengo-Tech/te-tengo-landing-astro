@@ -4,6 +4,27 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+### Changed
+
+- CI tests each commit once: `ci.yml` runs on pull requests, on pushes to `develop` and when `release.yml` calls it (`workflow_call`) on the release commit; it no longer runs on pushes to `main`, `release/*` or `hotfix/*`. Pull requests into `main` skip the test jobs (their head is the tested candidate). The candidate packs the `dist/` that CI built and Lighthouse checked, instead of building a second time.
+- The release pull request (`release: x.y.z`) and the back-merge pull request are opened by the GitHub App te-tengo-release-bot instead of `GITHUB_TOKEN`, so their `pull_request` checks run. The back-merge turns on auto-merge with a merge commit and, after a hotfix, also opens `main → release/*` for newer open release branches (`.github/scripts/back-merge.sh`).
+- The candidate record has a `staging` line (`pending`, `passed`, or `skipped` when `ENABLE_STAGING` is off); `produccion.yml` only deploys a candidate whose staging passed or was switched off (`.github/scripts/find-candidate.sh`).
+- The Cloudflare token is read only by the jobs of the `staging` and `produccion` environments; a missing one fails those jobs with an error instead of skipping them with a notice.
+- The production and rollback smoke checks also require `version.json` to name the deployed candidate's version and build.
+
+### Added
+
+- `ci-ok`: the last job of `ci.yml`, the single required check of the rulesets.
+- `release-gate.yml`: required check `release-gate` of pull requests into `main`; only a `release/x.y.z` or `hotfix/x.y.z` pull request whose merge puts into `main` the tree of a candidate that passed staging can be merged.
+- `pr-title.yml`: required check `pr-title`, the pull request title must be a Conventional Commit.
+- SBOM (SPDX) of every candidate as a release asset, with build provenance and SBOM attestations of the bundle.
+- Dependabot also updates the actions pinned in `.github/actions/*`.
+- docs/DEPLOY.md: release gate, required checks, release bot and a rollback rehearsal procedure.
+
+### Security
+
+- Least-privilege `permissions:` per job in every workflow (none at workflow level).
+
 ## [0.4.0] - 2026-10-09
 
 ### Changed

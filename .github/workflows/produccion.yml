@@ -1,31 +1,36 @@
 name: Produccion
 
 # Production of the landing (Gitflow "model C + tag at the end", docs/DEPLOY.md). Runs when a release
-# or hotfix pull request (opened by release.yml) is merged into main:
+# or hotfix pull request (opened by release.yml) is merged into main. Nothing is built or tested here:
+# the candidate's commit was tested by CI when release.yml built it, and release-gate proved before the
+# merge that main gets exactly its tree.
 #
-#   candidate    finds the approved candidate: the newest pre-release vX.Y.Z-rc.N (X.Y.Z = version of
-#                package.json) whose recorded git tree equals the tree of this main commit. None → the
-#                run fails: main is not what was tested.
+#   candidate    finds the approved candidate with .github/scripts/find-candidate.sh (the same command as
+#                release-gate): the newest pre-release vX.Y.Z-rc.N (X.Y.Z = version of package.json)
+#                whose recorded git tree equals the tree of this main commit and whose staging passed
+#                (or was switched off). None → the run fails: main is not what was tested.
 #   produccion   [approval on `produccion`] downloads that candidate's bundle, verifies its SHA-256
 #                and fingerprint and deploys it, without rebuilding, to the Pages production branch
 #                `main` = https://tetengo.reqsai.tech + smoke check.
 #   release      only after produccion deployed: the final GitHub Release vX.Y.Z (tag on this main
-#                commit) with the same assets and the CHANGELOG section as notes, then the back-merge
-#                pull request main → develop.
+#                commit) with the same assets (bundle, SBOM, SHA256SUMS; their attestations stay valid)
+#                and the CHANGELOG section as notes.
+#   back-merge   the pull request main → develop as te-tengo-release-bot, with auto-merge (merge
+#                commit); after a hotfix also main → any newer open release/* branch.
 #
 # If produccion fails, is rejected or is switched off, there is no tag. "Re-run failed jobs" (or a
 # manual run on main) deploys the same candidate again; nothing is rebuilt.
 #
 # Switch (organization Actions variable; a repository variable with the same name wins). Only `true`
-# turns it on: ENABLE_LANDING_PRODUCCION. Off, or without the Cloudflare secrets, nothing is deployed,
-# so no tag and no back-merge are created (the run summary says why).
+# turns it on: ENABLE_LANDING_PRODUCCION. Off, nothing is deployed, so no tag and no back-merge are
+# created (the run summary says why). Secrets: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID of the
+# `produccion` environment; RELEASE_APP_PRIVATE_KEY + variable RELEASE_APP_ID for the back-merge.
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 env:
   PAGES_PROJECT: te-tengo-landing
@@ -38,31 +43,33 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
-      released: ${{ steps.find.outputs.released }}
-      version: ${{ steps.find.outputs.version }}
+      released: ${{ steps.version.outputs.released }}
+      version: ${{ steps.version.outputs.version }}
+      tree: ${{ steps.version.outputs.tree }}
+      commit-message: ${{ steps.version.outputs.commit-message }}
       tag: ${{ steps.find.outputs.tag }}
       candidate: ${{ steps.find.outputs.candidate }}
       build: ${{ steps.find.outputs.build }}
       archive: ${{ steps.find.outputs.archive }}
       archive-sha256: ${{ steps.find.outputs.archive-sha256 }}
       dist-sha256: ${{ steps.find.outputs.dist-sha256 }}
-      tree: ${{ steps.find.outputs.tree }}
-      commit-message: ${{ steps.find.outputs.commit-message }}
-      cloudflare: ${{ steps.find.outputs.cloudflare }}
+      staging: ${{ steps.find.outputs.staging }}
     env:
       GH_TOKEN: ${{ github.token }}
-      HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
-      ENABLE_PRODUCCION: ${{ vars.ENABLE_LANDING_PRODUCCION }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: package.json
+          sparse-checkout: |
+            package.json
+            .github/scripts
           sparse-checkout-cone-mode: false
 
-      - name: Find the candidate whose tree is this commit's
-        id: find
+      - name: Version and tree of this commit
+        id: version
         run: |
           set -euo pipefail
           version=$(jq -r .version package.json)
@@ -70,14 +77,11 @@ jobs:
             echo "::error title=Invalid version::package.json version '${version}' is not X.Y.Z."
             exit 1
           fi
-          tree=$(git rev-parse 'HEAD^{tree}')
           {
             echo "version=${version}"
-            echo "tree=${tree}"
+            echo "tree=$(git rev-parse 'HEAD^{tree}')"
             echo "commit-message=$(git log -1 --format=%s HEAD)"
-            echo "cloudflare=${HAS_CLOUDFLARE}"
           } >> "$GITHUB_OUTPUT"
-
           # A re-run after a complete release finds the tag on this commit: nothing left to do.
           if released=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v${version}" --jq .object.sha 2> /dev/null); then
             if [ "$released" = "$GITHUB_SHA" ]; then
@@ -91,53 +95,22 @@ jobs:
           fi
           echo "released=false" >> "$GITHUB_OUTPUT"
 
-          field() { printf '%s\n' "$2" | sed -n "s/^$1: //p" | head -n1; }
-          mapfile -t tags < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-            --jq '.[] | select(.prerelease and (.draft | not)) | .tag_name' \
-            | { grep -E "^v${version//./\\.}-rc\.[0-9]+$" || true; } | sort -Vr)
-          found="" record="" checked=""
-          for tag in "${tags[@]}"; do
-            body=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq .body | tr -d '\r')
-            recorded=$(field tree "$body")
-            checked="${checked} ${tag} (tree ${recorded:0:12}),"
-            if [ "$recorded" = "$tree" ]; then
-              found=$tag
-              record=$body
-              break
-            fi
-          done
-          if [ -z "$found" ]; then
-            echo "::error title=No tested candidate for this commit::main (${GITHUB_SHA:0:12}, tree ${tree:0:12}) differs from every tested candidate of ${version}:${checked:- none}. Push the change to the release branch to build a new rc, test it in staging and merge again."
+      - name: Find the candidate whose tree is this commit's
+        id: find
+        if: steps.version.outputs.released == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TREE: ${{ steps.version.outputs.tree }}
+          ENABLE_PRODUCCION: ${{ vars.ENABLE_LANDING_PRODUCCION }}
+        run: |
+          set -euo pipefail
+          echo "### Approved candidate" >> "$GITHUB_STEP_SUMMARY"
+          if ! .github/scripts/find-candidate.sh "$VERSION" "$TREE"; then
+            echo "::error title=No tested candidate for this commit::main (${GITHUB_SHA:0:12}, tree ${TREE:0:12}) is not the tree of any candidate of ${VERSION} that passed staging. Push the change to the release branch to build a new rc, test it in staging and merge again."
             exit 1
           fi
-          # The record is in the notes; the tag itself must point at a commit with that same tree.
-          tag_tree=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${found}" --jq .commit.tree.sha)
-          if [ "$tag_tree" != "$tree" ]; then
-            echo "::error title=Candidate record mismatch::${found} records tree ${tree:0:12} but its tag points at a commit with tree ${tag_tree:0:12}."
-            exit 1
-          fi
-          if [ "$(field version "$record")" != "$version" ]; then
-            echo "::error title=Version mismatch::${found} records version '$(field version "$record")', package.json on main says ${version}."
-            exit 1
-          fi
-          for key in candidate build archive archive-sha256 dist-sha256; do
-            value=$(field "$key" "$record")
-            if [ -z "$value" ]; then
-              echo "::error title=Incomplete candidate record::${found} has no '${key}:' line in its notes."
-              exit 1
-            fi
-            echo "${key}=${value}" >> "$GITHUB_OUTPUT"
-          done
-          echo "tag=${found}" >> "$GITHUB_OUTPUT"
-          {
-            echo "### Approved candidate"
-            echo "- \`${found}\` (build \`${version}+$(field build "$record")\`, built from \`$(field commit "$record" | cut -c1-12)\`), tree \`${tree:0:12}\` = tree of main at \`${GITHUB_SHA:0:12}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$HAS_CLOUDFLARE" != true ]; then
-            echo "::notice title=Not deployed: Cloudflare secrets missing::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (docs/DEPLOY.md), then run Produccion on main again. Without a deployment there is no tag v${version}."
-            echo "- Produccion: skipped, the Cloudflare secrets are missing; no tag" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "$ENABLE_PRODUCCION" != true ]; then
-            echo "::notice title=Produccion switched off::ENABLE_LANDING_PRODUCCION is not 'true', so nothing is deployed and v${version} is not tagged. Turn it on and run Produccion on main again."
+          if [ "$ENABLE_PRODUCCION" != true ]; then
+            echo "::notice title=Produccion switched off::ENABLE_LANDING_PRODUCCION is not 'true', so nothing is deployed and v${VERSION} is not tagged. Turn it on and run Produccion on main again."
             echo "- Produccion: skipped, switched off (\`ENABLE_LANDING_PRODUCCION\` is not \`true\`); no tag" >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -145,9 +118,7 @@ jobs:
   produccion:
     name: Produccion (tetengo.reqsai.tech)
     needs: candidate
-    if: >-
-      needs.candidate.outputs.released == 'false' && needs.candidate.outputs.cloudflare == 'true'
-      && vars.ENABLE_LANDING_PRODUCCION == 'true'
+    if: needs.candidate.outputs.released == 'false' && vars.ENABLE_LANDING_PRODUCCION == 'true'
     environment:
       name: produccion
       url: ${{ env.PRODUCTION_URL }}
@@ -157,6 +128,8 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     outputs:
       deployed: ${{ steps.deploy.outputs.deployed }}
       url: ${{ steps.deploy.outputs.deployment-url }}
@@ -183,11 +156,29 @@ jobs:
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           project: ${{ env.PAGES_PROJECT }}
           wrangler-version: ${{ env.WRANGLER_VERSION }}
+      # Post-deploy health check: the site answers, its canonical link is right, the served index.html
+      # is the bundle's byte for byte, and version.json names the candidate's build.
       - name: Smoke check
         if: steps.deploy.outputs.deployed == 'true'
         env:
           CANONICAL: ${{ vars.SITE_URL || env.PRODUCTION_URL }}
-        run: bash scripts/smoke-check.sh "$PRODUCTION_URL" "$CANONICAL" dist/index.html
+          BUILD: ${{ needs.candidate.outputs.build }}
+          VERSION: ${{ needs.candidate.outputs.version }}
+        run: |
+          set -euo pipefail
+          bash scripts/smoke-check.sh "$PRODUCTION_URL" "$CANONICAL" dist/index.html
+          expected=$(jq -c '{version, build}' dist/version.json)
+          for attempt in $(seq 1 12); do
+            served=$(curl -fsS "${PRODUCTION_URL}/version.json?check=${attempt}" | jq -c '{version, build}' || true)
+            [ "$served" = "$expected" ] && break
+            echo "Attempt ${attempt}: version.json is ${served:-unreadable}, expected ${expected}"
+            sleep 5
+          done
+          if [ "$served" != "$expected" ]; then
+            echo "::error title=Production serves another build::${PRODUCTION_URL}/version.json is ${served:-unreadable}, expected ${expected} (candidate ${VERSION}+${BUILD})."
+            exit 1
+          fi
+          echo "- ${PRODUCTION_URL}/version.json: \`${served}\` (the candidate)" >> "$GITHUB_STEP_SUMMARY"
       - name: Summary
         if: always()
         env:
@@ -203,7 +194,7 @@ jobs:
 
   # Tag at the end: only a version that is live gets vX.Y.Z.
   release:
-    name: Tag vX.Y.Z and open the back-merge
+    name: Tag vX.Y.Z and GitHub Release
     needs: [candidate, produccion]
     if: >-
       !cancelled() && needs.produccion.result == 'success' && needs.produccion.outputs.deployed == 'true'
@@ -211,7 +202,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write # creates the tag vX.Y.Z and its GitHub Release
-      pull-requests: write # opens the back-merge pull request
     concurrency:
       group: landing-release-tag
       cancel-in-progress: false
@@ -225,6 +215,7 @@ jobs:
       ARCHIVE: ${{ needs.candidate.outputs.archive }}
       ARCHIVE_SHA256: ${{ needs.candidate.outputs.archive-sha256 }}
       DIST_SHA256: ${{ needs.candidate.outputs.dist-sha256 }}
+      STAGING: ${{ needs.candidate.outputs.staging }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -264,11 +255,11 @@ jobs:
             echo
             echo "---"
             echo
-            echo "Deployed to ${PRODUCTION_URL} from candidate [${CANDIDATE}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${RC_TAG}) without rebuilding (build \`${VERSION}+${BUILD}\`). \`rollback.yml\` can put this version back in production."
+            echo "Deployed to ${PRODUCTION_URL} from candidate [${CANDIDATE}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${RC_TAG}) without rebuilding (build \`${VERSION}+${BUILD}\`). \`rollback.yml\` can put this version back in production. Provenance and SBOM attestations: \`gh attestation verify ${ARCHIVE} --repo ${GITHUB_REPOSITORY}\`."
             echo
             echo "| Asset | SHA-256 |"
             echo "|---|---|"
-            echo "| \`${ARCHIVE}\` | \`${ARCHIVE_SHA256}\` |"
+            while read -r sha file; do echo "| \`${file}\` | \`${sha}\` |"; done < "$RUNNER_TEMP/bundle/SHA256SUMS"
             echo
             echo "Candidate record (read by the workflows):"
             echo
@@ -281,6 +272,7 @@ jobs:
             echo "archive: ${ARCHIVE}"
             echo "archive-sha256: ${ARCHIVE_SHA256}"
             echo "dist-sha256: ${DIST_SHA256}"
+            echo "staging: ${STAGING}"
             echo "run: ${RUN_URL}"
             echo '```'
           } >> "$RUNNER_TEMP/notes.md"
@@ -300,24 +292,39 @@ jobs:
             --title "$tag" --notes-file "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP"/bundle/*
           echo "- Created \`${tag}\` on \`${GITHUB_SHA:0:12}\` with the assets of \`${RC_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Open the back-merge pull request main → develop
+  back-merge:
+    name: Back-merge into develop
+    needs: [candidate, release]
+    if: needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Check the release bot configuration
+        env:
+          APP_ID: ${{ vars.RELEASE_APP_ID }}
+          HAS_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY != '' }}
         run: |
-          set -euo pipefail
-          ahead=$(gh api "repos/${GITHUB_REPOSITORY}/compare/develop...main" --jq .ahead_by)
-          if [ "$ahead" = 0 ]; then
-            echo "- develop already contains main: no back-merge needed" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+          if [ -z "$APP_ID" ] || [ "$HAS_KEY" != true ]; then
+            echo "::error title=Release bot not configured::The organization variable RELEASE_APP_ID and the organization secret RELEASE_APP_PRIVATE_KEY (GitHub App te-tengo-release-bot) are required to open the back-merge pull request. Nothing falls back to GITHUB_TOKEN: its pull requests start no workflows."
+            exit 1
           fi
-          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head main --base develop --state open --json url --jq '.[0].url // ""')
-          if [ -n "$existing" ]; then
-            echo "- Back-merge pull request already open: $existing" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          {
-            echo "Brings release \`v${VERSION}\` (main at \`${GITHUB_SHA:0:12}\`, candidate \`${CANDIDATE}\`) back into \`develop\`: the release branch fixes, the version bump and the CHANGELOG."
-            echo
-            echo "Merge with a merge commit, not a squash, so develop and main share history."
-          } > "$RUNNER_TEMP/body.md"
-          url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base develop --head main \
-            --title "chore: merge release ${VERSION} back into develop" --body-file "$RUNNER_TEMP/body.md")
-          echo "- Back-merge pull request opened: $url" >> "$GITHUB_STEP_SUMMARY"
+      - name: Mint the release bot token
+        id: bot
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # The App ID; GitHub accepts it as the JWT issuer like the client ID.
+          client-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write # auto-merge
+          permission-pull-requests: write
+      - name: Open the back-merge pull requests
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+          VERSION: ${{ needs.candidate.outputs.version }}
+        run: .github/scripts/back-merge.sh "$VERSION"

@@ -1,104 +1,83 @@
 ---
 import { es } from "../../content/es";
-import Icon from "../Icon.astro";
 
 const p = es.problem;
 ---
 
-<section class="bg-card" aria-labelledby="problema-title">
-  <div class="wrap grid gap-12 py-20 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20 lg:py-28">
-    <div class="lg:sticky lg:top-28 lg:self-start">
-      <h2 id="problema-title" class="t-h2 max-w-[16ch]">
+<section class="problem" aria-labelledby="problema-title">
+  <div class="wrap py-16 lg:py-24">
+    <div class="grid gap-6 lg:grid-cols-[1fr_1fr] lg:items-end lg:gap-16">
+      <h2 id="problema-title" class="t-h2 max-w-[17ch]">
         {p.title}
       </h2>
-      <p class="t-lead mt-6 max-w-[38ch] text-ink-2">{p.lead}</p>
+      <p class="t-lead max-w-[40ch] text-ink-2">{p.lead}</p>
     </div>
 
-    <div>
-      <ol class="facts" role="list">
-        {p.facts.map((f) => (
-          <li class="fact">
-            <p class="fact-value">{f.value}</p>
-            <div>
-              <p class="fact-text">{f.text}</p>
-              <p class="t-meta mt-2">
-                {es.a11y.source}{" "}
-                <a class="link font-bold!" href={f.href} rel="noopener" target="_blank">
-                  {f.source}
-                  <span class="sr-only"> {es.a11y.external}</span>
-                </a>
-              </p>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <p class="close mt-10">
-        <span class="close-icon">
-          <Icon name="bell" />
-        </span>
-        <span>{p.close}</span>
-      </p>
-    </div>
+    <ol class="facts mt-10 lg:mt-14" role="list">
+      {p.facts.map((f) => (
+        <li class="fact">
+          <p class="fact-value">{f.value}</p>
+          <p class="mt-3 text-ink">{f.text}</p>
+          <p class="t-meta mt-3">
+            {es.a11y.source}{" "}
+            <a class="link" href={f.href} rel="noopener" target="_blank">
+              {f.source}
+              <span class="sr-only"> {es.a11y.external}</span>
+            </a>
+          </p>
+        </li>
+      ))}
+    </ol>
+
+    <p class="close mt-10 lg:mt-12">{p.close}</p>
   </div>
 </section>
 
 <style>
+  .problem {
+    background: var(--color-card);
+  }
   .facts {
+    display: grid;
+    gap: 1rem;
     list-style: none;
-    border-top: 2px solid var(--color-ink);
+  }
+  @media (min-width: 48rem) {
+    .facts {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+    }
+    .fact + .fact {
+      border-left: 1px solid var(--color-line-2);
+    }
   }
   .fact {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.5rem 2rem;
-    padding: 1.75rem 0;
-    border-bottom: 1px solid var(--color-line);
+    padding: 1.5rem 0;
+    border-top: 1px solid var(--color-line-2);
   }
-  @media (min-width: 40rem) {
+  @media (min-width: 48rem) {
     .fact {
-      grid-template-columns: 11rem 1fr;
-      align-items: baseline;
+      padding: 0.5rem 2rem 0.5rem;
+      border-top: 0;
+    }
+    .fact:first-child {
+      padding-left: 0;
     }
   }
   .fact-value {
-    font-family: var(--font-sans);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
-    font-size: clamp(2.75rem, 2.2rem + 2vw, 3.75rem);
-    font-weight: 800;
+    font-size: clamp(2.5rem, 2rem + 2vw, 3.5rem);
+    font-weight: 700;
     line-height: 1;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.035em;
     color: var(--color-morado);
   }
-  .fact-text {
-    font-size: 1.1875rem;
-    line-height: 1.45;
-    max-width: 40ch;
-  }
   .close {
-    display: flex;
-    gap: 1rem;
-    align-items: flex-start;
-    padding: 1.4rem 1.5rem;
-    border-radius: var(--radius-card);
-    background: var(--color-morado-soft);
-    color: var(--color-morado-ink);
-    font-weight: 700;
+    max-width: 52ch;
     font-size: 1.125rem;
-    line-height: 1.45;
-  }
-  .close-icon {
-    display: grid;
-    place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    flex: none;
-    border-radius: 12px;
-    background: var(--color-morado);
-    color: #fff;
-  }
-  .close-icon :global(svg) {
-    width: 1.25rem;
-    height: 1.25rem;
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--color-morado-ink);
   }
 </style>

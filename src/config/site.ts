@@ -39,5 +39,5 @@ export const SITE = {
   name: "Te Tengo",
   locale: "es-PE",
   lang: "es",
-  themeColor: "#4A2A85",
+  themeColor: "#4B2E83",
 } as const;

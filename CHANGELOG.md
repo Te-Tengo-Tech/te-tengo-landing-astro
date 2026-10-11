@@ -4,6 +4,22 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-11
+
+### Changed
+
+- New brand kit: the two embracing figures replace «La T que sostiene» in the logo, symbol animation, favicon, app icons and Open Graph image; Poppins 400/600/700 (self-hosted) replaces Atkinson Hyperlegible; tokens follow the mobile prototype (cream ground, lilac surfaces, violet #4B2E83, coral accent, white cards with a 1 px lilac border, radius 20/14).
+- Landing redesigned with shorter copy: hero with the hug photo and the app's home screen, three steps next to Te Tengo Captura's link screen, features from the current prototype screens (fall alert, live view and «Ver todas», «Ver qué pasó», family roles, widget), privacy on violet, the example family with photos, a shorter FAQ and photo credits in the footer.
+- Copy follows the current decisions: the titular installs Te Tengo Captura and links the PC by QR (no longer «el equipo del proyecto»), several cameras and PCs per home, alert clips kept 30 days.
+
+### Added
+
+- Pexels photos (credited in the footer) and prototype screens as images through `astro:assets` (AVIF with a WebP fallback, responsive widths, lazy below the fold); `sharp` as a dev dependency for the build.
+
+### Removed
+
+- `Room.astro` (the stylised room illustration) and the Atkinson Hyperlegible fonts.
+
 ## [0.4.2] - 2026-10-10
 
 ### Added

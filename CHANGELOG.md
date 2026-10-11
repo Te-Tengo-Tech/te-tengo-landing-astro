@@ -4,6 +4,8 @@ Format based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/); 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-11
+
 ### Changed
 
 - New brand kit: the two embracing figures replace «La T que sostiene» in the logo, symbol animation, favicon, app icons and Open Graph image; Poppins 400/600/700 (self-hosted) replaces Atkinson Hyperlegible; tokens follow the mobile prototype (cream ground, lilac surfaces, violet #4B2E83, coral accent, white cards with a 1 px lilac border, radius 20/14).

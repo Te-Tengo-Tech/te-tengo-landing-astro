@@ -1,41 +1,77 @@
 ---
 import { es } from "../content/es";
 import Logo from "./Logo.astro";
+
+const f = es.footer;
 ---
 
-<footer class="bg-ink text-lila on-morado">
-  <div class="wrap grid gap-10 py-14 md:grid-cols-[1.4fr_1fr] md:gap-16 lg:py-16">
+<footer class="footer on-morado">
+  <div class="wrap grid gap-10 py-14 md:grid-cols-[1.3fr_1fr] md:gap-16 lg:py-16">
     <div class="space-y-5">
-      <Logo tone="dark" class="h-9 w-auto" />
-      <p class="max-w-[52ch] text-[0.9875rem] leading-relaxed">{es.footer.project}</p>
-      <p class="max-w-[52ch] text-[0.9875rem] leading-relaxed">{es.footer.privacy}</p>
+      <Logo tone="dark" class="h-10 w-auto" />
+      <p class="max-w-[52ch] text-[0.9375rem] leading-relaxed">{f.project}</p>
+      <p class="max-w-[52ch] text-[0.9375rem] leading-relaxed">{f.privacy}</p>
     </div>
     <div class="grid content-start gap-8 sm:grid-cols-2">
       <div>
-        <h2 class="mb-3 text-sm font-extrabold tracking-wide text-white uppercase">
-          {es.footer.authorsLabel}
-        </h2>
-        <ul class="space-y-1.5 text-[0.9875rem]">
-          {es.footer.authors.map((a) => (
+        <h2 class="foot-h">{f.authorsLabel}</h2>
+        <ul class="space-y-1.5 text-[0.9375rem]" role="list">
+          {f.authors.map((a) => (
             <li>{a}</li>
           ))}
         </ul>
       </div>
       <nav aria-label={es.a11y.footerNav}>
-        <h2 class="mb-3 text-sm font-extrabold tracking-wide text-white uppercase">Te Tengo</h2>
-        <ul class="space-y-1.5 text-[0.9875rem]">
-          {es.footer.links.map((l) => (
+        <h2 class="foot-h">Te Tengo</h2>
+        <ul class="space-y-1.5 text-[0.9375rem]" role="list">
+          {f.links.map((l) => (
             <li>
-              <a href={l.href} class="underline decoration-white/30 hover:text-white hover:decoration-white">
+              <a href={l.href} class="foot-link">
                 {l.label}
               </a>
             </li>
           ))}
         </ul>
       </nav>
+      <div id="creditos" class="sm:col-span-2">
+        <h2 class="foot-h">{f.creditsLabel}</h2>
+        <p class="text-[0.9375rem]">
+          {f.credits.map((c, i) => (
+            <>
+              <a href={c.href} class="foot-link" rel="noopener" target="_blank">
+                {c.author}
+                <span class="sr-only"> {es.a11y.external}</span>
+              </a>
+              {i < f.credits.length - 1 ? " · " : ""}
+            </>
+          ))}
+        </p>
+        <p class="mt-1 text-sm">{f.creditsNote}</p>
+      </div>
     </div>
   </div>
   <div class="border-t border-white/10">
-    <p class="wrap py-5 text-sm">UPC · {es.footer.year}</p>
+    <p class="wrap py-5 text-sm">UPC · {f.year}</p>
   </div>
 </footer>
+
+<style>
+  .footer {
+    background: var(--color-ink);
+    color: var(--color-lila);
+  }
+  .foot-h {
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+  }
+  .foot-link {
+    text-decoration: underline;
+    text-decoration-color: rgb(255 255 255 / 0.3);
+  }
+  .foot-link:hover {
+    color: #fff;
+    text-decoration-color: #fff;
+  }
+</style>

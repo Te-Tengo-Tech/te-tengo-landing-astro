@@ -14,7 +14,7 @@ All copy is in **Spanish (Peru)** and every product claim comes from a project d
 | Framework       | [Astro](https://astro.build) 7, static output, **zero client JS by default**                                                                        |
 | Styling         | Tailwind CSS v4 (CSS-first, tokens in `src/styles/global.css` under `@theme`)                                                                       |
 | Language        | TypeScript (strictest), `.astro` components                                                                                                         |
-| Fonts           | Atkinson Hyperlegible Next and Mono, self-hosted WOFF2 (Latin subset, OFL)                                                                          |
+| Fonts           | Poppins 400, 600 and 700 (brand kit), self-hosted WOFF2 (Latin subset, OFL)                                                                         |
 | Quality         | ESLint (typescript-eslint, eslint-plugin-astro + jsx-a11y), Prettier (prettier-plugin-astro), `astro check`, Lighthouse CI (≥ 95 in every category) |
 | SEO             | Canonical URLs, Open Graph/Twitter cards with a brand OG image, `robots.txt`, `@astrojs/sitemap`, JSON-LD `SoftwareApplication`                     |
 | Hosting         | Cloudflare Pages (`te-tengo-landing` for the site, `te-tengo-app` for the PWA) and Cloudflare R2 (binaries), deployed by GitHub Actions             |

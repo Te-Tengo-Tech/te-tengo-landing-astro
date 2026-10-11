@@ -14,7 +14,7 @@ All copy is in **Spanish (Peru)** and every product claim comes from a project d
 | Framework       | [Astro](https://astro.build) 7, static output, **zero client JS by default**                                                                        |
 | Styling         | Tailwind CSS v4 (CSS-first, tokens in `src/styles/global.css` under `@theme`)                                                                       |
 | Language        | TypeScript (strictest), `.astro` components                                                                                                         |
-| Fonts           | Atkinson Hyperlegible Next and Mono, self-hosted WOFF2 (Latin subset, OFL)                                                                          |
+| Fonts           | Poppins 400, 600 and 700 (brand kit), self-hosted WOFF2 (Latin subset, OFL)                                                                         |
 | Quality         | ESLint (typescript-eslint, eslint-plugin-astro + jsx-a11y), Prettier (prettier-plugin-astro), `astro check`, Lighthouse CI (≥ 95 in every category) |
 | SEO             | Canonical URLs, Open Graph/Twitter cards with a brand OG image, `robots.txt`, `@astrojs/sitemap`, JSON-LD `SoftwareApplication`                     |
 | Hosting         | Cloudflare Pages (`te-tengo-landing` for the site, `te-tengo-app` for the PWA) and Cloudflare R2 (binaries), deployed by GitHub Actions             |
@@ -24,17 +24,17 @@ Client JavaScript is limited to two small islands: the mobile navigation and the
 
 ## Page
 
-| Section              | Anchor           | Content                                                                                                                                                                |
-| -------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hero                 | —                | «Cuida a tu familiar aunque no estés en casa.», **Descargar** and **Ver cómo funciona**, the stylised room with the pose skeleton                                      |
-| Problem              | —                | Three sourced figures from the project charter (INEI, Fleming & Brayne)                                                                                                |
-| How it works         | `#como-funciona` | Webcam at home → the PC detects the fall (video stays home) → alert on the phone; live view with consent and «Solo postura»                                            |
-| Features             | `#funciones`     | The alert and its timeline (unstable movement, fall, confirmation on the floor, recovery, escalation), 6 s clip, live view access log, family and notice order, pauses |
-| Privacy and trust    | `#privacidad`    | Video processed on the PC (ADR 0007), consent, Ley N.° 29733, access log, validation results with a link to `/validacion/`                                             |
-| For whom             | `#para-quien`    | Family member, older adult, project team                                                                                                                               |
-| Downloads            | `#descargas`     | Android APK, iPhone PWA (3 Safari steps, iOS 16.4+), Windows agent, Mac agent (beta, Apple's steps to open an unsigned app); the visitor's platform is highlighted     |
-| FAQ                  | `#preguntas`     | Recording, who can see, no internet, hardware, bathroom, reliability, medical use                                                                                      |
-| Final call to action | —                | «Cerca de los tuyos, aunque estés lejos.» with the symbol assembling itself                                                                                            |
+| Section              | Anchor           | Content                                                                                                                                   |
+| -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Hero                 | —                | «Cuida a tu familiar aunque no estés en casa.», **Descargar la app** and **Ver cómo funciona**, the hug photo with the app's home screen  |
+| Problem              | —                | Three sourced figures from the project charter (INEI, Fleming & Brayne)                                                                   |
+| How it works         | `#como-funciona` | Webcam on the home PC → link the PC from the phone by QR → alert on the phone, next to Te Tengo Captura's link screen                     |
+| Features             | `#funciones`     | Fall alert, live view and «Ver todas», «Ver qué pasó», family roles, widget (prototype screens)                                           |
+| Privacy and trust    | `#privacidad`    | Posture only, processed on the PC (ADR 0007), live view not recorded with an access log, consent, Ley N.° 29733, 30-day clips, validation |
+| For whom             | `#para-quien`    | Older adult, titular, secondary contact, invited relative (example people, Pexels photos)                                                 |
+| Downloads            | `#descargas`     | Android APK, iPhone PWA (3 Safari steps, iOS 16.4+), Windows agent, Mac agent (beta); the visitor's platform is highlighted               |
+| FAQ                  | `#preguntas`     | Recording, who can see, no internet, hardware, bathroom, reliability, medical use                                                         |
+| Final call to action | —                | «Cerca de los tuyos, aunque estés lejos.» with the symbol assembling itself                                                               |
 
 Other routes: `/validacion/` (methodology and results), `/404`. `/descargas`, `/descargar` and `/download` redirect to `/#descargas`; `/app` and `/app/*` (where the PWA used to live) redirect with a `301` to `https://app.tetengo.reqsai.tech/`.
 

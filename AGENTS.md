@@ -13,13 +13,14 @@ The public landing page of **Te Tengo** (a system that detects falls of older ad
 3. **The video is processed on the household PC** (ADR 0007 of the desktop repository): only the event clip and the live view, when a family member opens it, leave the house. Do not describe cloud processing.
 4. **Demo data is labelled.** Names (Rosa, Carmen, Luis Huamán) and times come from the prototype and always carry an «Ejemplo» note.
 5. **All copy is Spanish (Peru)** and lives in `src/content/es.ts`. Components never hardcode visible text. Docs, comments and commits are English.
-6. **Brand:** `--morado #4A2A85` is the brand and the primary action. Coral `#E8765A` and durazno `#FFB59C` are brand colours only (the symbol's dot and «Tengo»): never text, buttons or states. Red (caída), amber (movimiento inestable) and green (calma) appear only for those states. Nothing may look like surveillance: no camera lenses, eyes or CCTV imagery next to the symbol. Brand rules: `Alba-docs/05-prototipos/marca/README.md`.
+6. **Brand:** the kit's two embracing figures. Violet `--morado #4B2E83` is the brand, brand text and the primary action; coral `#FF8F7E` is an accent fill only (the embraced figure, icon circles), never white text on coral and never an alert; cream `#FFF7F1` is the ground and lilac `#F7F2F5` the neutral surface. Poppins 700/600/400. Red (caída), amber (movimiento inestable) and green (calma) appear only for those states. Nothing may look like surveillance: no camera lenses, eyes or CCTV imagery next to the symbol. Brand rules: `Alba-docs/05-prototipos/marca/README.md`; tokens: `app-movil/DESIGN.md`.
 
 ## Sources
 
 | Topic                           | Document                                                                                                                         |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Brand, symbol geometry, colours | `Alba-docs/05-prototipos/marca/README.md` and its SVGs (copied to `src/assets/brand/`)                                           |
+| Screens and photos              | `Alba-docs/05-prototipos/app-movil/pantallas/`, `app-escritorio/pantallas/` and `app-movil/fotos/` (`CREDITOS.md`)               |
 | Wording, users, flows, rules    | `te-tengo-mobile-flutter/docs/references/` (`PRODUCT.md`, `DESIGN.md`, `prototype/prototipo.html`)                               |
 | Desktop agent                   | `te-tengo-desktop-pywebview/docs/references/desktop-prototype/` (`PRODUCT.md`, `DESIGN.md`), `README.md`, `docs/INSTALLATION.md` |
 | Acceptance criteria             | `…/docs/references/PRODUCT_BACKLOG.md`                                                                                           |
@@ -37,10 +38,11 @@ src/
   content/es.ts         every visible string, with its source; add en.ts with the same shape later
   styles/global.css     Tailwind entry, @theme tokens, @font-face, type scale, buttons, symbol animation
   layouts/Base.astro    <head> (SEO, OG, JSON-LD slot, icons), skip link, header, footer
-  components/           Header, Footer, Logo, Mark (animated symbol), Room (room + pose skeleton), Icon
+  components/           Header, Footer, Logo, Mark (animated symbol), Icon
+  assets/               brand/ (kit SVGs), photos/ (Pexels), screens/ (prototype exports with the phone frame)
   components/sections/  one file per section, composed in pages/index.astro
   pages/                index, validacion, 404, robots.txt
-public/                 fonts (+ OFL), icons, og.png, _headers, _redirects, site.webmanifest
+public/                 fonts (Poppins + OFL), icons, og.png, _headers, _redirects, site.webmanifest
 scripts/                csp.mjs (post-build CSP hashes), og-image.mjs, lhci-summary.mjs
 deploy/app/             _headers and robots.txt of the Flutter PWA's own Pages project (te-tengo-app)
 ```
@@ -49,8 +51,8 @@ deploy/app/             _headers and robots.txt of the Flutter PWA's own Pages p
 
 - **Zero JS by default.** A `<script>` is allowed only for real interactivity (today: mobile menu, platform detection) and must be a progressive enhancement. FAQ and install steps use `<details>`.
 - **Tailwind v4 is CSS-first**: there is no `tailwind.config.*`; tokens live in `@theme`. Component styles go in the component's scoped `<style>`. Scoped (unlayered) CSS beats Tailwind utilities, so do not set `margin`/`padding` in scoped CSS on elements that also take spacing utilities; Tailwind's preflight already resets them.
-- **Illustrations** are the prototype's stylised room and pose skeleton (`Room.astro`, ported from `roomSVG()` and `skeleton()`), never photos of people.
-- **Motion:** one orchestrated entrance in the hero, the symbol assembling itself (header on load, final CTA on scroll with `animation-timeline: view()`), the skeleton's slight sway. Only `transform`, `opacity` and `stroke-dashoffset`. Everything stops under `prefers-reduced-motion`. The hero headline never animates opacity (it is the LCP element).
+- **Images:** the product is shown with exports of the current prototype screens (`src/assets/screens/`, cropped to the phone frame by hand from `app-movil/pantallas/`), and people with the prototype's Pexels photos (`src/assets/photos/`), which stand for the example family and are credited in the footer. Always through `astro:assets` `<Picture>` (AVIF with a WebP fallback, `widths` and `sizes`, `loading="lazy"` below the fold), with Spanish alt text. Live view and clips stay illustrations of posture, never real camera images.
+- **Motion:** one orchestrated entrance in the hero and the symbol assembling itself like the app's splash (final CTA on scroll with `animation-timeline: view()`, 404 on load). Only `transform`, `opacity` and `stroke-dashoffset`. Everything stops under `prefers-reduced-motion`. The hero headline never animates opacity (it is the LCP element).
 - **Accessibility:** WCAG AA contrast, landmarks, skip link, visible focus (`:focus-visible`), 44 px minimum targets, `role="list"` on unstyled lists, decorative SVGs `aria-hidden`, informative ones `role="img"` with a label.
 - **Security headers** live in `public/_headers`. `pnpm build` runs `scripts/csp.mjs`, which writes the hashes of the inline scripts into the CSP. The Flutter PWA is a separate Pages project (`te-tengo-app`, `https://app.tetengo.reqsai.tech`) with its own headers in `deploy/app/_headers`; link to it only through `APP_URL`. The landing's `_redirects` sends the old `/app/*` paths there.
 

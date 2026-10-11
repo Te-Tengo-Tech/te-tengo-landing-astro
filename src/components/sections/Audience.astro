@@ -1,79 +1,135 @@
 ---
+import { Picture } from "astro:assets";
+import type { ImageMetadata } from "astro";
 import { es } from "../../content/es";
-import Icon from "../Icon.astro";
-import type { IconName } from "../icons";
+import rosa from "../../assets/photos/rosa.jpg";
+import carmen from "../../assets/photos/carmen.jpg";
+import luis from "../../assets/photos/luis.jpg";
+import milagros from "../../assets/photos/milagros.jpg";
 
 const a = es.audience;
+const photos: Record<string, ImageMetadata> = { rosa, carmen, luis, milagros };
+const [elder, ...family] = a.people;
 ---
 
-<section id="para-quien" class="bg-card" aria-labelledby="para-quien-title">
+<section id="para-quien" class="audience" aria-labelledby="para-quien-title">
   <div class="wrap py-20 lg:py-28">
-    <div class="max-w-[46rem]">
-      <h2 id="para-quien-title" class="t-h2">
-        {a.title}
-      </h2>
-      <p class="t-lead mt-5 text-ink-2">{a.lead}</p>
+    <h2 id="para-quien-title" class="t-h2">
+      {a.title}
+    </h2>
+    <p class="t-lead mt-4 text-ink-2">{a.lead}</p>
+
+    <div class="people mt-12">
+      {elder && (
+        <article class="person-lead card">
+          <Picture
+            src={photos[elder.photo] ?? rosa}
+            formats={["avif"]}
+            fallbackFormat="webp"
+            widths={[360, 540, 720]}
+            sizes="(min-width: 64rem) 28rem, 100vw"
+            alt={elder.alt}
+            loading="lazy"
+            class="lead-photo"
+          />
+          <div class="p-6 lg:p-8">
+            <p class="role">{elder.who}</p>
+            <h3 class="t-h3 mt-1">{elder.name}</h3>
+            <p class="mt-2 max-w-[40ch] text-ink-2">{elder.text}</p>
+          </div>
+        </article>
+      )}
+      <ul class="family" role="list">
+        {family.map((p) => (
+          <li class="person card">
+            <Picture
+              src={photos[p.photo] ?? carmen}
+              formats={["avif"]}
+              fallbackFormat="webp"
+              widths={[160, 240, 320]}
+              sizes="(min-width: 48rem) 9rem, 6.5rem"
+              alt={p.alt}
+              loading="lazy"
+              class="avatar"
+            />
+            <div>
+              <p class="role">{p.who}</p>
+              <h3 class="t-h3 mt-0.5">{p.name}</h3>
+              <p class="mt-1.5 text-[0.9875rem] text-ink-2">{p.text}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
-    <ul class="roles mt-14" role="list">
-      {a.people.map((p, i) => (
-        <li class:list={["role", i === 1 && "role-senior"]}>
-          <span class="role-icon">
-            <Icon name={p.icon as IconName} />
-          </span>
-          <h3 class="mt-6 text-[1.5rem] leading-tight font-extrabold tracking-tight">{p.who}</h3>
-          <p class="mt-1 text-[1.1875rem] font-bold text-morado-ink">{p.title}</p>
-          <p class="mt-3 text-ink-2">{p.text}</p>
-        </li>
-      ))}
-    </ul>
+    <p class="example-label mt-5">{a.note}</p>
   </div>
 </section>
 
 <style>
-  .roles {
-    display: grid;
-    list-style: none;
-    border-top: 2px solid var(--color-ink);
+  .audience {
+    background: var(--color-ground);
   }
-  @media (min-width: 56rem) {
-    .roles {
-      grid-template-columns: repeat(3, 1fr);
+  .people {
+    display: grid;
+    gap: 1rem;
+  }
+  @media (min-width: 64rem) {
+    .people {
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 1.25rem;
     }
+  }
+  .person-lead {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .person-lead :global(.lead-photo) {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    height: auto;
+    object-fit: cover;
+    object-position: 50% 25%;
+  }
+  @media (min-width: 64rem) {
+    .person-lead :global(.lead-photo) {
+      aspect-ratio: 5 / 4;
+    }
+  }
+  .family {
+    display: grid;
+    gap: 1rem;
+    list-style: none;
+  }
+  @media (min-width: 64rem) {
+    .family {
+      gap: 1.25rem;
+    }
+  }
+  .person {
+    display: grid;
+    grid-template-columns: 6.5rem 1fr;
+    gap: 1.25rem;
+    align-items: center;
+    padding: 1rem 1.25rem 1rem 1rem;
+  }
+  @media (min-width: 48rem) {
+    .person {
+      grid-template-columns: 9rem 1fr;
+      gap: 1.5rem;
+    }
+  }
+  .person :global(.avatar) {
+    width: 100%;
+    aspect-ratio: 1;
+    height: auto;
+    object-fit: cover;
+    object-position: 50% 30%;
+    border-radius: 16px;
   }
   .role {
-    padding: 2rem 0;
-    border-bottom: 1px solid var(--color-line);
-  }
-  @media (min-width: 56rem) {
-    .role {
-      padding: 2.25rem 2.25rem 0.5rem;
-      border-bottom: 0;
-    }
-    .role:first-child {
-      padding-left: 0;
-    }
-    .role + .role {
-      border-left: 1px solid var(--color-line);
-    }
-  }
-  .role p:last-child {
-    max-width: 38ch;
-  }
-  .role-icon {
-    display: grid;
-    place-items: center;
-    width: 3.5rem;
-    height: 3.5rem;
-    border-radius: 18px;
-    background: var(--color-ground);
-    color: var(--color-morado-ink);
-  }
-  .role-icon :global(svg) {
-    width: 1.75rem;
-    height: 1.75rem;
-  }
-  .role-senior .role-icon {
-    background: var(--color-morado);
-    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-coral-ink);
   }
 </style>
